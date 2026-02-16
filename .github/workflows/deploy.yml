@@ -1,0 +1,126 @@
+name: Deploy Resume App
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read    # Required to check out code
+
+jobs:
+  # JOB 1: INTELLIGENCE CHECK
+  # Detects which folders changed so we don't redeploy unnecessary things
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      env_name: ${{ steps.set-env.outputs.env_name }}
+      stack_name: ${{ steps.set-env.outputs.stack_name }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      # 1. Detect Changes
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+      # 2. Define Environment (Prod vs Test)
+      - id: set-env
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            echo "env_name=prod" >> $GITHUB_OUTPUT
+            echo "stack_name=resume-stack-prod" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=test" >> $GITHUB_OUTPUT
+            echo "stack_name=resume-stack-test" >> $GITHUB_OUTPUT
+          fi
+
+  # JOB 2: DEPLOY BACKEND (Tier 2 & 3)
+  # Only runs if 'backend' folder changed
+  deploy-backend:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: SAM Build and Deploy
+        uses: aws-actions/setup-sam@v2
+      
+      - name: Build Backend
+        run: |
+          cd backend
+          sam build
+
+      - name: Deploy Backend
+        run: |
+          cd backend
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+            --stack-name ${{ needs.check-changes.outputs.stack_name }} \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides Environment=${{ needs.check-changes.outputs.env_name }} \
+            --resolve-s3
+
+  # JOB 3: DEPLOY FRONTEND (Tier 1)
+  # Only runs if 'frontend' folder changed
+  deploy-frontend:
+    needs: [check-changes, deploy-backend]
+    # Run if frontend changed OR if we forced a run (always ensure condition allows backend logic to finish)
+    if: ${{ needs.check-changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 1. Fetch Backend URL (Even if backend didn't redeploy, we need the URL)
+      - name: Fetch Backend API URL
+        id: get-api-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.check-changes.outputs.stack_name }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text)
+          echo "NEXT_PUBLIC_API_URL=$API_URL" >> $GITHUB_ENV
+          echo "Found API URL: $API_URL"
+
+      # 2. Build Next.js
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+        env:
+          # This injects the API URL into your Next.js build
+          NEXT_PUBLIC_BACKEND_URL: ${{ env.NEXT_PUBLIC_API_URL }}
+
+      # 3. Deploy Step (Placeholder for now)
+      - name: Deploy to Hosting
+        run: |
+          echo "Deploying frontend to S3/Fargate/Vercel..."
+          # Add your specific deploy command here later
+          # Example: aws s3 sync out/ s3://my-frontend-bucket

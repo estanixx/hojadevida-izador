@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Setup OIDC Trust for GitHub Actions
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: Your GitHub Username or Organization (e.g., student-dev)
+  RepoName:
+    Type: String
+    Description: Your Repository Name (e.g., harvard-resume-builder)
+
+Resources:
+  # 1. The Identity Provider (Connects AWS to GitHub)
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1 # GitHub's thumbprint
+
+  # 2. The Role (What GitHub Actions will "assume")
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubDeployRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Ref GitHubOIDCProvider
+            Condition:
+              StringLike:
+                # CRITICAL SECURITY LOCK: Only allow YOUR repo and specific branches
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${RepoName}:*"
+      # 3. Permissions (What the pipeline can actually do)
+      Policies:
+        - PolicyName: DeployPerms
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - s3:*
+                  - lambda:*
+                  - apigateway:*
+                  - dynamodb:*
+                  - iam:CreateRole
+                  - iam:PutRolePolicy
+                  - iam:PassRole # Needed to give Lambda permission to run
+                Resource: "*"
+
+Outputs:
+  RoleArn:
+    Description: "Copy this ARN to your GitHub Secrets"
+    Value: !GetAtt GitHubDeployRole.Arn

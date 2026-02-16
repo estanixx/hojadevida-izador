@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Resume Builder Backend Stack
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+  Function:
+    Timeout: 10
+    Runtime: nodejs24.x
+    # PROD PRACTICE: Environment Variables for configuration
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref ResumeTable
+        BUCKET_NAME: !Ref ResumeBucket
+
+Resources:
+  # --- TIER 3: STORAGE ---
+  ResumeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Resumes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  ResumeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: resume-bucket-local
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"] # Added HEAD just in case
+            AllowedOrigins: ["*"] # Be permissive for LocalStack
+            ExposedHeaders: ["ETag"]
+
+  # --- TIER 2: COMPUTE (API + LAMBDA) ---
+  CreateResumeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # CodeUri points to the folder containing package.json and source code
+      # In LocalStack, we map this volume. In Prod, SAM zips this folder.
+      CodeUri: src/
+      Handler: handlers/create-resume.lambdaHandler
+      Policies:
+        # Give Lambda permission to write to DB and S3
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResumeTable
+        - S3WritePolicy:
+            BucketName: !Ref ResumeBucket
+      Events:
+        # This creates the API Gateway automatically
+        PostResumeApi:
+          Type: Api
+          Properties:
+            Path: /resume
+            Method: post
+
+
+  GetUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers/get-upload-url.lambdaHandler
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ResumeBucket
+      Policies:
+        # This gives the Lambda permission to sign URLs for this bucket
+        - S3WritePolicy:
+            BucketName: !Ref ResumeBucket
+      Events:
+        GetUrlApi:
+          Type: Api
+          Properties:
+            Path: /upload-url
+            Method: get
+
+Outputs:
+  # This tells us the URL of our API after deployment
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resume/"
