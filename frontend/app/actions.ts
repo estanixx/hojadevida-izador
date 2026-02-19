@@ -27,7 +27,7 @@ export async function createResume(formData: FormData) {
     if (!res.ok) {
       const errorText = await res.text();
       console.error('Backend Error:', errorText);
-      return { message: `Error: ${res.status} ${res.statusText}` };
+      throw new Error(`Error: ${res.status} ${res.statusText}`);
     }
 
     const data = await res.json();
@@ -35,11 +35,9 @@ export async function createResume(formData: FormData) {
 
     // Refresh the UI if we were listing resumes
     revalidatePath('/');
-
-    return { message: 'Success! Resume Saved.' };
   } catch (e: any) {
     console.error('Network Error:', e);
-    return { message: 'Failed to connect to backend.' };
+    throw new Error('Failed to connect to backend.');
   }
 }
 

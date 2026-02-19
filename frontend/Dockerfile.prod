@@ -1,0 +1,38 @@
+# Stage 1: Building the code
+FROM node:24-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+
+# CRITICAL: We bake the API URL into the build time for Static Generation
+# But for Client-Side calls, Next.js needs this at Runtime. 
+# We'll handle Runtime env vars in the ECS Task Definition later.
+ARG BACKEND_URL
+ENV BACKEND_URL=$BACKEND_URL
+
+RUN npm run build
+
+# Stage 2: Running the code (Production Image)
+FROM node:24-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Don't run as root (Security Best Practice)
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy only necessary files from builder
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]

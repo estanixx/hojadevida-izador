@@ -51,6 +51,12 @@ Resources:
                   - iam:CreateRole
                   - iam:PutRolePolicy
                   - iam:PassRole # Needed to give Lambda permission to run
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
                 Resource: "*"
 
 Outputs:

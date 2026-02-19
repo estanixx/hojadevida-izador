@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Fargate Service Stack
+
+Parameters:
+  ImageUrl:
+    Type: String
+    Description: Docker Image URL from ECR
+  BackendApiUrl:
+    Type: String
+    Description: The URL of the Backend Lambda API
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ResumeCluster
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/resume-frontend
+      RetentionInDays: 7
+
+  # The Execution Role lets Fargate pull images from ECR and push logs
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: FargateExecutionRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: resume-frontend-task
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: frontend-container
+          Image: !Ref ImageUrl
+          PortMappings:
+            - ContainerPort: 3000
+          Environment:
+            # We pass the Backend URL here at RUNTIME
+            - Name: BACKEND_URL
+              Value: !Ref BackendApiUrl
+            - Name: PORT
+              Value: "3000"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED  # <--- CRITICAL: This replaces the NAT Gateway
+          Subnets:
+            # Import the subnets from the Networking stack
+            - !ImportValue ResumeSubnetOne
+            - !ImportValue ResumeSubnetTwo
+          SecurityGroups:
+            - !ImportValue ResumeFargateSG
+      LoadBalancers:
+        - ContainerName: frontend-container
+          ContainerPort: 3000
+          TargetGroupArn: !ImportValue ResumeTargetGroupArn

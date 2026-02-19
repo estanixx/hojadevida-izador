@@ -1,35 +1,64 @@
-services:
-    # TIER 1: Frontend
-    frontend:
-        build: ./frontend
-        ports:
-        - "3000:3000"
-        volumes:
-        # Map your local folder to the container so you can edit code live
-        - ./frontend:/app
-        - /app/node_modules
-        environment:
-        # Tell Next.js where AWS is
-        - AWS_REGION=us-east-1
-        - AWS_ACCESS_KEY_ID=test
-        - AWS_SECRET_ACCESS_KEY=test
-        - AWS_ENDPOINT_URL=http://localstack:4566
-        depends_on:
-        - localstack
+version: "3.8"
 
-  # TIER 2 & 3: Local AWS (Backend + DB)
-    localstack:
-        image: localstack/localstack
-        ports:
-        - "4566:4566"
-        environment:
-        - SERVICES=s3,dynamodb,lambda,apigateway,cloudformation,sts,iam
-        - DEBUG=1
-        - DOCKER_HOST=unix:///var/run/docker.sock
-        # CRITICAL: This tells LocalStack "If you see a Lambda pointing to s3://... or a path, look here"
-        - LAMBDA_REMOTE_DOCKER=0
-        volumes:
-        - ./localstack-init/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
-        # Mount the ENTIRE backend folder so CloudFormation can find "src/"
-        - ./backend:/etc/localstack/init/ready.d/backend
-        - "/var/run/docker.sock:/var/run/docker.sock"
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - ./localstack-init:/tmp/config 
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+    depends_on:
+      - localstack
+    command: >
+      sh -c "
+      echo '🔍 Limpiando residuos...';
+      rm -f /tmp/config/api-id.txt;
+
+      echo '⏳ Esperando ID de LocalStack...';
+      FILE_PATH='/tmp/config/api-id.txt';
+      FOUND_ID='';
+      
+      while [ -z \"$$FOUND_ID\" ]; do
+        if [ -s \"$$FILE_PATH\" ]; then
+          FOUND_ID=$$(cat \"$$FILE_PATH\" | tr -d '[:space:]');
+        fi;
+        
+        if [ -z \"$$FOUND_ID\" ]; then
+          sleep 1;
+        fi;
+      done;
+
+      echo \"✅ ID Encontrado: $$FOUND_ID\";
+      
+      export BACKEND_URL=http://localstack:4566/restapis/$$FOUND_ID/Prod/_user_request_;
+      
+      rm -f \"$$FILE_PATH\";
+      echo '🗑️ Archivo temporal eliminado.';
+      echo \"🚀 Backend URL configurada en: $$BACKEND_URL\";
+      
+      npm run dev
+      "
+
+  localstack:
+    image: localstack/localstack
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,dynamodb,lambda,apigateway,cloudformation,sts,iam,ec2,elbv2
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_REMOTE_DOCKER=0
+    volumes:
+      - ./localstack-init/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - .:/project

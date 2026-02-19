@@ -37,10 +37,10 @@ Resources:
       BucketName: resume-bucket-local
       CorsConfiguration:
         CorsRules:
-          - AllowedHeaders: ["*"]
-            AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"] # Added HEAD just in case
-            AllowedOrigins: ["*"] # Be permissive for LocalStack
-            ExposedHeaders: ["ETag"]
+          - AllowedHeaders: ['*']
+            AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'] # Added HEAD just in case
+            AllowedOrigins: ['*'] # Be permissive for LocalStack
+            ExposedHeaders: ['ETag']
 
   # --- TIER 2: COMPUTE (API + LAMBDA) ---
   CreateResumeFunction:
@@ -48,7 +48,7 @@ Resources:
     Properties:
       # CodeUri points to the folder containing package.json and source code
       # In LocalStack, we map this volume. In Prod, SAM zips this folder.
-      CodeUri: src/
+      CodeUri: ../backend/src/
       Handler: handlers/create-resume.lambdaHandler
       Policies:
         # Give Lambda permission to write to DB and S3
@@ -64,11 +64,10 @@ Resources:
             Path: /resume
             Method: post
 
-
   GetUploadUrlFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
+      CodeUri: ../backend/src/
       Handler: handlers/get-upload-url.lambdaHandler
       Environment:
         Variables:
@@ -87,5 +86,5 @@ Resources:
 Outputs:
   # This tells us the URL of our API after deployment
   ApiUrl:
-    Description: "API Gateway endpoint URL"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resume/"
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resume/'

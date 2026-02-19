@@ -5,122 +5,136 @@ on:
     branches:
       - main
       - test
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'infrastructure/**' # Run if infra changes
 
 permissions:
-  id-token: write   # Required for OIDC
-  contents: read    # Required to check out code
+  id-token: write
+  contents: read
 
 jobs:
-  # JOB 1: INTELLIGENCE CHECK
-  # Detects which folders changed so we don't redeploy unnecessary things
-  check-changes:
+  # JOB 1: DEFINE ENVIRONMENT (Prod vs Test)
+  define-env:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
       env_name: ${{ steps.set-env.outputs.env_name }}
-      stack_name: ${{ steps.set-env.outputs.stack_name }}
     steps:
-      - uses: actions/checkout@v3
-      
-      # 1. Detect Changes
-      - uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-            frontend:
-              - 'frontend/**'
-
-      # 2. Define Environment (Prod vs Test)
       - id: set-env
         run: |
           if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
             echo "env_name=prod" >> $GITHUB_OUTPUT
-            echo "stack_name=resume-stack-prod" >> $GITHUB_OUTPUT
           else
             echo "env_name=test" >> $GITHUB_OUTPUT
-            echo "stack_name=resume-stack-test" >> $GITHUB_OUTPUT
           fi
 
-  # JOB 2: DEPLOY BACKEND (Tier 2 & 3)
-  # Only runs if 'backend' folder changed
-  deploy-backend:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.backend == 'true' }}
+  # JOB 2: DEPLOY NETWORKING (Layer 0)
+  # Must run first. Sets up VPC, Subnets, and Load Balancer.
+  deploy-networking:
+    needs: define-env
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy Networking Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/networking.yaml \
+            --stack-name resume-networking-${{ needs.define-env.outputs.env_name }} \
+            --parameter-overrides Environment=${{ needs.define-env.outputs.env_name }}
+
+  # JOB 3: DEPLOY BACKEND (Layer 1)
+  # Depends on Networking. Deploys Lambda & DB.
+  deploy-backend:
+    needs: [define-env, deploy-networking]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Configure AWS Credentials (OIDC)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: SAM Build and Deploy
-        uses: aws-actions/setup-sam@v2
-      
-      - name: Build Backend
+      - name: SAM Build
         run: |
-          cd backend
-          sam build
+          # Build using the new template location
+          sam build --template-file infrastructure/backend-service.yaml
 
-      - name: Deploy Backend
+      - name: SAM Deploy
         run: |
-          cd backend
           sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
-            --stack-name ${{ needs.check-changes.outputs.stack_name }} \
+            --stack-name resume-backend-${{ needs.define-env.outputs.env_name }} \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides Environment=${{ needs.check-changes.outputs.env_name }} \
+            --parameter-overrides Environment=${{ needs.define-env.outputs.env_name }} \
             --resolve-s3
 
-  # JOB 3: DEPLOY FRONTEND (Tier 1)
-  # Only runs if 'frontend' folder changed
+  # JOB 4: DEPLOY FRONTEND (Layer 2)
+  # Depends on Backend. Builds Docker -> ECR -> Fargate.
   deploy-frontend:
-    needs: [check-changes, deploy-backend]
-    # Run if frontend changed OR if we forced a run (always ensure condition allows backend logic to finish)
-    if: ${{ needs.check-changes.outputs.frontend == 'true' }}
+    needs: [define-env, deploy-backend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials (OIDC)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 1. Fetch Backend URL (Even if backend didn't redeploy, we need the URL)
-      - name: Fetch Backend API URL
-        id: get-api-url
+      # 1. Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # 2. Get Backend URL (For the Docker Build)
+      - name: Get Backend API URL
         run: |
           API_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ needs.check-changes.outputs.stack_name }} \
+            --stack-name resume-backend-${{ needs.define-env.outputs.env_name }} \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text)
-          echo "NEXT_PUBLIC_API_URL=$API_URL" >> $GITHUB_ENV
-          echo "Found API URL: $API_URL"
+          echo "BACKEND_URL=$API_URL" >> $GITHUB_ENV
 
-      # 2. Build Next.js
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
+      # 3. Build & Push Docker Image
+      - name: Build, tag, and push image to Amazon ECR
         env:
-          # This injects the API URL into your Next.js build
-          NEXT_PUBLIC_BACKEND_URL: ${{ env.NEXT_PUBLIC_API_URL }}
-
-      # 3. Deploy Step (Placeholder for now)
-      - name: Deploy to Hosting
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: resume-frontend-${{ needs.define-env.outputs.env_name }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Deploying frontend to S3/Fargate/Vercel..."
-          # Add your specific deploy command here later
-          # Example: aws s3 sync out/ s3://my-frontend-bucket
+          # Ensure repo exists (idempotent)
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || aws ecr create-repository --repository-name $ECR_REPOSITORY
+
+          # Build Production Image
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -f frontend/Dockerfile.prod \
+            --build-arg BACKEND_URL=${{ env.BACKEND_URL }} \
+            ./frontend
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+      # 4. Deploy Fargate Service
+      - name: Deploy Frontend Infrastructure
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/frontend-service.yaml \
+            --stack-name resume-frontend-${{ needs.define-env.outputs.env_name }} \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              ImageUrl=${{ env.IMAGE_URI }} \
+              BackendApiUrl=${{ env.BACKEND_URL }} \
+              Environment=${{ needs.define-env.outputs.env_name }}
