@@ -87,4 +87,4 @@ Outputs:
   # This tells us the URL of our API after deployment
   ApiUrl:
     Description: 'API Gateway endpoint URL'
-    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resume/'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'

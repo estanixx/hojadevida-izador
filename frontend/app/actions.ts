@@ -43,22 +43,26 @@ export async function createResume(formData: FormData) {
 
 export async function getPresignedUrl(filename: string) {
   console.log('Server Action: Requesting Upload URL for', filename);
-  console.log("🔍 DEBUG: process.env.BACKEND_URL es ->", BACKEND_URL);
+  console.log('🔍 DEBUG: process.env.BACKEND_URL es ->', BACKEND_URL);
 
-  const urlFinal = `${BACKEND_URL}/upload`; // Ajusta la ruta según tu API
-  
+  const urlFinal = `${BACKEND_URL}/upload-url`; // Ajusta la ruta según tu API
+
   // 2. Imprime la URL final armada
-  console.log("🚀 DEBUG: Intentando hacer fetch a ->", urlFinal);
-  
+  console.log('🚀 DEBUG: Intentando hacer fetch a ->', urlFinal);
 
   try {
     const res = await fetch(`${BACKEND_URL}/upload-url?filename=${filename}`, {
       method: 'GET',
       cache: 'no-store',
     });
-    const data = await res.json();
-
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`❌ DEBUG: API Gateway respondió con HTTP ${res.status}`);
+      console.error(`❌ DEBUG: Mensaje de AWS:`, errorText);
+    }
     // --- THE SMART FIX ---
+    const data = await res.json();
     let finalUrl = data.uploadUrl;
 
     // Only apply the "Localhost Patch" if we are in development mode
@@ -73,6 +77,9 @@ export async function getPresignedUrl(filename: string) {
     // In Production, 'finalUrl' remains exactly what AWS gave us (https://s3.amazonaws.com...)
     return { success: true, url: finalUrl };
   } catch (e: any) {
+    console.error(`❌ DEBUG: API Gateway request failed:`, e);
+    console.error(`❌ DEBUG: Mensaje de AWS:`, e.message);
+
     return { success: false, error: e.message };
   }
 }
