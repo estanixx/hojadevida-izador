@@ -57,6 +57,11 @@ Resources:
                   - iam:GetRole
                   - iam:AttachRolePolicy
                   - iam:DetachRolePolicy
+                  - ec2:*
+                  - elasticloadbalancing:*
+                  - ecr:*
+                  - ecs:*
+                  - logs:*
                 Resource: "*"
 
 Outputs:

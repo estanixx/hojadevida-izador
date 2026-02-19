@@ -42,9 +42,15 @@ export async function createResume(formData: FormData) {
 }
 
 export async function getPresignedUrl(filename: string) {
-  console.log('Server Action: Requesting Upload URL for', filename);
-
   const { BACKEND_URL } = process.env;
+  console.log('Server Action: Requesting Upload URL for', filename);
+  console.log("🔍 DEBUG: process.env.BACKEND_URL es ->", BACKEND_URL);
+
+  const urlFinal = `${BACKEND_URL}/upload`; // Ajusta la ruta según tu API
+  
+  // 2. Imprime la URL final armada
+  console.log("🚀 DEBUG: Intentando hacer fetch a ->", urlFinal);
+  
 
   try {
     const res = await fetch(`${BACKEND_URL}/upload-url?filename=${filename}`, {

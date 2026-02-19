@@ -133,7 +133,7 @@ jobs:
           aws cloudformation deploy \
             --template-file infrastructure/frontend-service.yaml \
             --stack-name resume-frontend-${{ needs.define-env.outputs.env_name }} \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
               ImageUrl=${{ env.IMAGE_URI }} \
               BackendApiUrl=${{ env.BACKEND_URL }} \
