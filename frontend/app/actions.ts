@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-
+const BACKEND_URL = process.env.BACKEND_URL?.replace(/\/+$/, '') || 'http://localhost:3000';
 export async function createResume(formData: FormData) {
   const content = formData.get('resumeContent');
 
@@ -11,7 +11,7 @@ export async function createResume(formData: FormData) {
   console.log('Server Action: Sending to Backend...', process.env.BACKEND_URL);
 
   try {
-    const res = await fetch(`${process.env.BACKEND_URL}/resume`, {
+    const res = await fetch(`${BACKEND_URL}/resume`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,8 +43,13 @@ export async function createResume(formData: FormData) {
 
 export async function getPresignedUrl(filename: string) {
   console.log('Server Action: Requesting Upload URL for', filename);
+  console.log("🔍 DEBUG: process.env.BACKEND_URL es ->", BACKEND_URL);
 
-  const { BACKEND_URL } = process.env;
+  const urlFinal = `${BACKEND_URL}/upload`; // Ajusta la ruta según tu API
+  
+  // 2. Imprime la URL final armada
+  console.log("🚀 DEBUG: Intentando hacer fetch a ->", urlFinal);
+  
 
   try {
     const res = await fetch(`${BACKEND_URL}/upload-url?filename=${filename}`, {
