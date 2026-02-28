@@ -44,9 +44,19 @@ jobs:
   deploy-frontend:
     needs:  deploy-network-infrastructure
     runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.filter.outputs.frontend }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Detect frontend changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -56,9 +66,11 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
+        if: steps.filter.outputs.frontend == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag, and Push Image to ECR
+        if: steps.filter.outputs.frontend == 'true'
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -69,6 +81,14 @@ jobs:
           docker build -f ./frontend/Dockerfile.prod -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Get Current Image URI
+        if: steps.filter.outputs.frontend == 'false'
+        id: get-current
+        run: |
+          # Use AWS CLI to find the image currently in the Task Definition
+          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text)
+          echo "image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
 
       - name: Deploy CloudFormation Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
@@ -76,6 +96,6 @@ jobs:
           name: my-frontend-stack
           template: infrastructure/frontend-setup.yaml
           parameter-overrides: >-
-            ECRImageUri=${{ steps.build-image.outputs.image }}
+            ECRImageUri=${{ steps.build-image.outputs.image || steps.get-current.outputs.image }}
           capabilities: CAPABILITY_NAMED_IAM
           no-fail-on-empty-changeset: "true"
