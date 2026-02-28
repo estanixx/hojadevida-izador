@@ -80,7 +80,6 @@ Resources:
               # Existing
               - "s3:*"
               - "ecs:*"
-              
               # Networking (VPCs, Subnets, NAT, Route Tables)
               - "ec2:*"
               
@@ -131,6 +130,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+              StringLike:
                 token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
       Tags:
         - Key: "Name"
@@ -154,12 +154,20 @@ Outputs:
   OIDCProviderArn:
     Description: "ARN of the GitHub OIDC Provider"
     Value: !Ref GitHubOIDCProvider
+    Export: 
+      Name: "Hojadevida-GitHubOIDCProviderArn"
   OIDCRoleArn:
     Description: "ARN of the GitHub OIDC Role"
     Value: !GetAtt GitHubOIDCProviderRole.Arn
+    Export: 
+      Name: "Hojadevida-GitHubOIDCRoleArn"
   ECRRepositoryUri:
     Description: "URI of the ECR repository for the frontend application"
     Value: !GetAtt ECRRepository.RepositoryUri
+    Export: 
+      Name: "Hojadevida-ECRRepositoryUri"
   ECRRepositoryName:
     Description: "Name of the ECR repository for the frontend application"
     Value: !Ref ECRRepositoryName
+    Export: 
+      Name: "Hojadevida-ECRRepositoryName"

@@ -74,7 +74,7 @@ jobs:
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
           name: my-frontend-stack
-          template: infrastructure/template.yaml
+          template: infrastructure/frontend-setup.yaml
           parameter-overrides: >-
             ECRImageUri=${{ steps.build-image.outputs.image }}
           capabilities: CAPABILITY_NAMED_IAM
