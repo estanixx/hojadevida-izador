@@ -74,7 +74,7 @@ jobs:
         id: get-current
         run: |
           # Use AWS CLI to find the image currently in the Task Definition
-          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text)
+          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text 2>/dev/null || echo "")
           if [ -z "$CURRENT_IMAGE" ]; then
             echo "image_found=false" >> $GITHUB_OUTPUT
             echo "No existing task definition found."
