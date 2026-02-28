@@ -69,8 +69,23 @@ jobs:
         if: steps.filter.outputs.frontend == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Get Current Image URI
+        if: steps.filter.outputs.frontend == 'false'
+        id: get-current
+        run: |
+          # Use AWS CLI to find the image currently in the Task Definition
+          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text)
+          if [ -z "$CURRENT_IMAGE" ]; then
+            echo "image_found=false" >> $GITHUB_OUTPUT
+            echo "No existing task definition found."
+          else
+            echo "image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
+            echo "image_found=true" >> $GITHUB_OUTPUT
+            echo "Found existing image: $CURRENT_IMAGE"
+          fi
+
       - name: Build, Tag, and Push Image to ECR
-        if: steps.filter.outputs.frontend == 'true'
+        if: steps.filter.outputs.frontend == 'true' || steps.get-current.outputs.image_found == 'false'
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -82,14 +97,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       
-      - name: Get Current Image URI
-        if: steps.filter.outputs.frontend == 'false'
-        id: get-current
-        run: |
-          # Use AWS CLI to find the image currently in the Task Definition
-          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text)
-          echo "image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
-
       - name: Deploy CloudFormation Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
