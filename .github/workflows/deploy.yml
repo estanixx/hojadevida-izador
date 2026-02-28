@@ -16,6 +16,7 @@ on:
 env:
   ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_ARN }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
+  REPO_NAME: my-frontend-app
 permissions:
   id-token: write
   contents: read
@@ -74,14 +75,23 @@ jobs:
         id: get-current
         run: |
           # Use AWS CLI to find the image currently in the Task Definition
-          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition hojadevida-frontend-task --query 'taskDefinition.containerDefinitions[0].image' --output text 2>/dev/null || echo "")
-          if [ -z "$CURRENT_IMAGE" ]; then
+          REPO_NAME="${{ env.REPO_NAME }}"
+          REGISTRY_ID=$(aws ecr describe-registry --query 'registryId' --output text)
+          
+          LAST_IMAGE_TAG=$(aws ecr describe-images \
+            --repository-name $REPO_NAME \
+            --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$LAST_IMAGE_TAG" ] || [ "$LAST_IMAGE_TAG" == "None" ]; then
             echo "image_found=false" >> $GITHUB_OUTPUT
-            echo "No existing task definition found."
+            echo "No se encontraron imágenes en el repositorio ECR: $REPO_NAME"
           else
-            echo "image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
+            # Construimos la URI completa
+            FULL_URI="${{ steps.login-ecr.outputs.registry }}/$REPO_NAME:$LAST_IMAGE_TAG"
+            echo "image=$FULL_URI" >> $GITHUB_OUTPUT
             echo "image_found=true" >> $GITHUB_OUTPUT
-            echo "Found existing image: $CURRENT_IMAGE"
+            echo "Última imagen encontrada en ECR: $FULL_URI"
           fi
 
       - name: Build, Tag, and Push Image to ECR
@@ -89,7 +99,7 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: my-frontend-app
+          ECR_REPOSITORY: ${{ env.REPO_NAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           # Only build if frontend files changed (optional optimization)
