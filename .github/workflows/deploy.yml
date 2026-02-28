@@ -1,5 +1,11 @@
 name: AWS deploy workflow
 on:
+  workflow_dispatch: # Esto habilita el botón manual
+    inputs:
+      reason:
+        description: 'Razón del despliegue manual'
+        required: false
+        default: 'Actualización rápida'
   push:
     branches:
       - prod
