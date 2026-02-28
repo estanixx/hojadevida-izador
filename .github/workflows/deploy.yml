@@ -38,7 +38,7 @@ jobs:
           name: my-network-infrastructure-stack
           template: infrastructure/network-setup.yaml
           capabilities: CAPABILITY_NAMED_IAM
-          no-fail-on-empty-changeset: "true"
+          no-fail-on-empty-changeset: "1" 
 
   # 3. Update frontend container definition and trigger ECS deployment (if changed)
   deploy-frontend:
@@ -98,4 +98,4 @@ jobs:
           parameter-overrides: >-
             ECRImageUri=${{ steps.build-image.outputs.image || steps.get-current.outputs.image }}
           capabilities: CAPABILITY_NAMED_IAM
-          no-fail-on-empty-changeset: "true"
+          no-fail-on-empty-changeset: "1" 
