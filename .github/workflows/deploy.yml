@@ -12,6 +12,7 @@ on:
     paths:
       - 'frontend/**'
       - 'infrastructure/**'
+      - '.github/workflows/deploy.yml'
 env:
   ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_ARN }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -66,7 +67,6 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        if: steps.filter.outputs.frontend == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Get Current Image URI
