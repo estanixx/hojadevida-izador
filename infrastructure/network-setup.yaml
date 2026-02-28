@@ -183,6 +183,8 @@ Outputs:
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
+    Export: 
+      Name: "Hojadevida-VPC"
   PublicSubnet1:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
