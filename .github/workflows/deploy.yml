@@ -1,0 +1,75 @@
+name: AWS deploy workflow
+on:
+  push:
+    branches:
+      - prod
+    paths:
+      - 'frontend/**'
+      - 'infrastructure/**'
+env:
+  ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_ARN }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  # 1. Create or update CloudFormation stack for network infrastructure (if changed)
+  deploy-network-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }} # Adjust to your specific region
+
+      - name: Deploy CloudFormation Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: my-network-infrastructure-stack
+          template: infrastructure/network-setup.yaml
+          capabilities: CAPABILITY_NAMED_IAM
+          no-fail-on-empty-changeset: "true"
+
+  # 3. Update frontend container definition and trigger ECS deployment (if changed)
+  deploy-frontend:
+    needs:  deploy-network-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{env.ROLE_TO_ASSUME}}
+          aws-region: ${{ env.AWS_REGION }} # Adjust to your specific region
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: my-frontend-app
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Only build if frontend files changed (optional optimization)
+          docker build -f ./frontend/Dockerfile.prod -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy CloudFormation Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: my-frontend-stack
+          template: infrastructure/template.yaml
+          parameter-overrides: >-
+            ECRImageUri=${{ steps.build-image.outputs.image }}
+          capabilities: CAPABILITY_NAMED_IAM
+          no-fail-on-empty-changeset: "true"
