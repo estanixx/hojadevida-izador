@@ -17,6 +17,7 @@ Parameters:
 
 Conditions:
   UseNatGatewayCondition: !Equals [!Ref UseNatGateway, "true"]
+  NotUseNatGatewayCondition: !Equals [!Ref UseNatGateway, "false"]
 Resources:
   # 1. Main Structure: VPC, Subnets
   VPC: 
@@ -177,7 +178,22 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway2
-      
+  
+  PrivateRouteNoNat1:
+    Type: AWS::EC2::Route
+    Condition: NotUseNatGatewayCondition
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteNoNat2:
+    Type: AWS::EC2::Route
+    Condition: NotUseNatGatewayCondition
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
 Outputs:
   VPCId:
