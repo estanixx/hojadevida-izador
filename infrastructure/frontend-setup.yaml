@@ -115,6 +115,7 @@ Resources:
 
   FrontendService:
     Type: AWS::ECS::Service
+    DependsOn: ALBListener
     Properties:
       Cluster: !Ref ECSCluster
       ServiceName: hojadevida-frontend-service
