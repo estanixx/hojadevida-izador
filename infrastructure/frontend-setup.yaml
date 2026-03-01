@@ -28,14 +28,13 @@ Resources:
           FromPort: 3000
           ToPort: 3000
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          
-  
+
   # 2. Load Balancer and Target Group
   PublicLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing
-      Subnets: 
+      Subnets:
         - !ImportValue Hojadevida-PublicSubnet1
         - !ImportValue Hojadevida-PublicSubnet2
       SecurityGroups: [!Ref ALBSecurityGroup]
@@ -65,8 +64,9 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: ecsTaskExecutionRole
+      PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -74,7 +74,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-  
 
   # 4. ECS Cluster and Service Definition
   ECSCluster:
@@ -98,7 +97,7 @@ Resources:
       ContainerDefinitions:
         - Name: frontend
           Image: !Ref ECRImageUri
-          PortMappings: 
+          PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
           Environment:
@@ -112,7 +111,7 @@ Resources:
       Tags:
         - Key: Name
           Value: hojadevida-frontend-task
-      
+
   FrontendService:
     Type: AWS::ECS::Service
     Properties:
@@ -133,7 +132,7 @@ Resources:
             - !ImportValue Hojadevida-PrivateSubnet1
             - !ImportValue Hojadevida-PrivateSubnet2
 
-  # 5. CloudWatch Logs for ECS      
+  # 5. CloudWatch Logs for ECS
   CloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

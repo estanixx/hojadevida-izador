@@ -4,140 +4,144 @@ Parameters:
   GitHubOrg:
     Type: String
     Description: The GitHub organization name (e.g., "my-org")
-    Default: "estanixx"
+    Default: 'estanixx'
   GitHubRepo:
     Type: String
     Description: The GitHub repository name (e.g., "my-repo")
-    Default: "hojadevida-izador"
+    Default: 'hojadevida-izador'
   ECRRepositoryName:
     Type: String
     Description: Name of the ECR repository for the frontend application
-    Default: "my-frontend-app"
+    Default: 'my-frontend-app'
 Resources:
-
   # 1. Github OIDC Provider and Role for CI/CD
   GitHubOIDCProvider:
     Type: AWS::IAM::OIDCProvider
     Properties:
-      Url: "https://token.actions.githubusercontent.com"
+      Url: 'https://token.actions.githubusercontent.com'
       ClientIdList:
-        - "sts.amazonaws.com"
+        - 'sts.amazonaws.com'
       Tags:
-        - Key: "Name"
-          Value: "GitHub OIDC Provider"
-        - Key: "GitHubOrg"
+        - Key: 'Name'
+          Value: 'GitHub OIDC Provider'
+        - Key: 'GitHubOrg'
           Value: !Ref GitHubOrg
-        - Key: "GitHubRepo"
+        - Key: 'GitHubRepo'
           Value: !Ref GitHubRepo
-          
+
   PipelinePermissionsBoundary:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: "PipelinePermissionsBoundary"
+      ManagedPolicyName: 'PipelinePermissionsBoundary'
       PolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           # 1. Allow standard operations your apps actually need
-          - Effect: "Allow"
+          - Effect: 'Allow'
             Action:
-              - "s3:*"
-              - "dynamodb:*"
-              - "logs:*"
-              - "ec2:*"
-              - "ecs:*"
-              - "lambda:*"
-              - "cognito-idp:*"
-            Resource: "*"
-            
+              - '*'
+            Resource: '*'
+
           # 2. Deny creating or modifying IAM Users/Keys
-          - Effect: "Deny"
+          - Effect: 'Deny'
             Action:
-              - "iam:CreateUser"
-              - "iam:CreateAccessKey"
-              - "iam:UpdateAssumeRolePolicy"
-            Resource: "*"
-            
+              - 'iam:CreateUser'
+              - 'iam:CreateAccessKey'
+              - 'iam:UpdateAssumeRolePolicy'
+            Resource: '*'
+
           # 3. Deny modifying the boundary itself
-          - Effect: "Deny"
+          - Effect: 'Deny'
             Action:
-              - "iam:DeletePolicy"
-              - "iam:CreatePolicyVersion"
-              - "iam:DeletePolicyVersion"
-              - "iam:SetDefaultPolicyVersion"
-            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary"
+              - 'iam:DeletePolicy'
+              - 'iam:CreatePolicyVersion'
+              - 'iam:DeletePolicyVersion'
+              - 'iam:SetDefaultPolicyVersion'
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary'
 
   GithubOIDCProviderPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: "GitHubOIDCProviderPolicy"
+      ManagedPolicyName: 'GitHubOIDCProviderPolicy'
       Roles:
         - !Ref GitHubOIDCProviderRole
       PolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: "Allow"
+          - Effect: 'Allow'
             Action:
               # Existing
-              - "s3:*"
-              - "ecs:*"
+              - 's3:*'
+              - 'ecs:*'
               # Networking (VPCs, Subnets, NAT, Route Tables)
-              - "ec2:*"
-              
+              - 'elasticloadbalancing:*'
+              - 'ec2:*'
+
               # SAM & CloudFormation Core
-              - "cloudformation:*"
-              - "lambda:*"
-              - "apigateway:*"
-              
+              - 'cloudformation:*'
+              - 'lambda:*'
+              - 'apigateway:*'
+
               # Database & Auth
-              - "dynamodb:*"
-              - "cognito-idp:*"
-              
+              - 'dynamodb:*'
+              - 'cognito-idp:*'
+
               # Observability & Registry
-              - "logs:*"
-              - "ecr:*"
+              - 'logs:*'
+              - 'ecr:*'
             Resource:
-              - "*"
+              - '*'
             # 1. Restrict Role Creation: Must attach the boundary
-          - Effect: "Allow"
+          - Effect: 'Allow'
             Action:
-              - "iam:CreateRole"
-              - "iam:AttachRolePolicy"
-              - "iam:PutRolePermissionsBoundary"
-            Resource: "*"
+              - 'iam:CreateRole'
+              - 'iam:DeleteRole'
+              - 'iam:AttachRolePolicy'
+              - 'iam:DetachRolePolicy'
+              - 'iam:PutRolePermissionsBoundary'
+            Resource: '*'
             Condition:
               StringEquals:
-                "iam:PermissionsBoundary": !Sub "arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary"
-                
-          # 2. Allow passing roles to services (needed for ECS/Lambda)
-          - Effect: "Allow"
+                'iam:PermissionsBoundary': !Sub 'arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary'
+
+          # 1b. Allow tagging on roles (CloudFormation commonly tags IAM resources on create)
+          - Effect: 'Allow'
             Action:
-              - "iam:PassRole"
-              - "iam:GetRole"
-              - "iam:GetRolePolicy"
-            Resource: "*"
-  
+              - 'iam:TagRole'
+              - 'iam:UntagRole'
+            Resource: '*'
+
+          # 2. Allow passing roles to services (needed for ECS/Lambda)
+          - Effect: 'Allow'
+            Action:
+              - 'iam:PassRole'
+              - 'iam:GetRole'
+              - 'iam:GetRolePolicy'
+            Resource: '*'
+
   GitHubOIDCProviderRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: "GitHubOIDCRole"
+      RoleName: 'GitHubOIDCRole'
+      PermissionsBoundary: !Ref PipelinePermissionsBoundary
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: "Allow"
+          - Effect: 'Allow'
             Principal:
               Federated: !Ref GitHubOIDCProvider
-            Action: "sts:AssumeRoleWithWebIdentity"
+            Action: 'sts:AssumeRoleWithWebIdentity'
             Condition:
               StringEquals:
-                token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+                token.actions.githubusercontent.com:aud: 'sts.amazonaws.com'
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
       Tags:
-        - Key: "Name"
-          Value: "GitHub OIDC Role"
-        - Key: "GitHubOrg"
+        - Key: 'Name'
+          Value: 'GitHub OIDC Role'
+        - Key: 'GitHubOrg'
           Value: !Ref GitHubOrg
-        - Key: "GitHubRepo"
+        - Key: 'GitHubRepo'
           Value: !Ref GitHubRepo
 
   # 2. ECR Repository for Frontend
@@ -148,26 +152,26 @@ Resources:
       ImageScanningConfiguration:
         ScanOnPush: true
       Tags:
-        - Key: "Name"
-          Value: "Frontend ECR Repository"
+        - Key: 'Name'
+          Value: 'Frontend ECR Repository'
 Outputs:
   OIDCProviderArn:
-    Description: "ARN of the GitHub OIDC Provider"
+    Description: 'ARN of the GitHub OIDC Provider'
     Value: !Ref GitHubOIDCProvider
-    Export: 
-      Name: "Hojadevida-GitHubOIDCProviderArn"
+    Export:
+      Name: 'Hojadevida-GitHubOIDCProviderArn'
   OIDCRoleArn:
-    Description: "ARN of the GitHub OIDC Role"
+    Description: 'ARN of the GitHub OIDC Role'
     Value: !GetAtt GitHubOIDCProviderRole.Arn
-    Export: 
-      Name: "Hojadevida-GitHubOIDCRoleArn"
+    Export:
+      Name: 'Hojadevida-GitHubOIDCRoleArn'
   ECRRepositoryUri:
-    Description: "URI of the ECR repository for the frontend application"
+    Description: 'URI of the ECR repository for the frontend application'
     Value: !GetAtt ECRRepository.RepositoryUri
-    Export: 
-      Name: "Hojadevida-ECRRepositoryUri"
+    Export:
+      Name: 'Hojadevida-ECRRepositoryUri'
   ECRRepositoryName:
-    Description: "Name of the ECR repository for the frontend application"
+    Description: 'Name of the ECR repository for the frontend application'
     Value: !Ref ECRRepositoryName
-    Export: 
-      Name: "Hojadevida-ECRRepositoryName"
+    Export:
+      Name: 'Hojadevida-ECRRepositoryName'
