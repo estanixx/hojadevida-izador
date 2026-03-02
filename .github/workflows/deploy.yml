@@ -51,14 +51,31 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Detect frontend changes
-        uses: dorny/paths-filter@v3
-        id: filter
         with:
+          fetch-depth: 0
+
+      - name: Detect frontend changes (push)
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@v3
+        id: filter_push
+        with:
+          base: ${{ github.event.before }}
+          ref: ${{ github.sha }}
           filters: |
             frontend:
               - 'frontend/**'
+
+      - name: Mark frontend as changed (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        id: filter_manual
+        run: echo "frontend=true" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize frontend change output
+        id: filter
+        run: |
+          FRONTEND_CHANGED="${{ steps.filter_push.outputs.frontend || steps.filter_manual.outputs.frontend || 'false' }}"
+          echo "frontend=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "frontend_changed=$FRONTEND_CHANGED"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -93,6 +110,7 @@ jobs:
             echo "image_found=true" >> $GITHUB_OUTPUT
             echo "Última imagen encontrada en ECR: $FULL_URI"
           fi
+          echo "${{steps.filter.outputs.frontend}}"
 
       - name: Build, Tag, and Push Image to ECR
         if: steps.filter.outputs.frontend == 'true' || steps.get-current.outputs.image_found == 'false'
