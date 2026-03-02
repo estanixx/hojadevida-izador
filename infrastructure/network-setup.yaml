@@ -9,15 +9,15 @@ Parameters:
     Type: AWS::EC2::AvailabilityZone::Name
     Description: Second availability zone for the VPC
     Default: us-east-1b
-  UseNatGateway:
+  Production:
     Type: String
     Description: Whether to use a NAT Gateway for private subnets
     AllowedValues: [true, false]
     Default: false
 
 Conditions:
-  UseNatGatewayCondition: !Equals [!Ref UseNatGateway, "true"]
-  NotUseNatGatewayCondition: !Equals [!Ref UseNatGateway, "false"]
+  IsProduction: !Equals [!Ref Production, "true"]
+  NotProduction: !Not [!Equals [!Ref Production, "true"]]
 Resources:
   # 1. Main Structure: VPC, Subnets
   VPC: 
@@ -36,7 +36,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.16.0.0/20
       AvailabilityZone: !Ref AZ1
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: !If [IsProduction, false, true]
       Tags:
         - Key: Name
           Value: hojadevida-subnet-1
@@ -47,7 +47,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.16.16.0/20
       AvailabilityZone: !Ref AZ2
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: !If [IsProduction, false, true]
       Tags:
         - Key: Name
           Value: hojadevida-subnet-2
@@ -93,7 +93,7 @@ Resources:
 
   EIP1:
     Type: AWS::EC2::EIP
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       Domain: vpc
       Tags:
@@ -102,7 +102,7 @@ Resources:
   
   EIP2:
     Type: AWS::EC2::EIP
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       Domain: vpc
       Tags:
@@ -111,7 +111,7 @@ Resources:
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       AllocationId: !GetAtt EIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -121,7 +121,7 @@ Resources:
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       AllocationId: !GetAtt EIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -165,7 +165,7 @@ Resources:
   
   PrivateRoute1:
     Type: AWS::EC2::Route
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -173,7 +173,7 @@ Resources:
   
   PrivateRoute2:
     Type: AWS::EC2::Route
-    Condition: UseNatGatewayCondition
+    Condition: IsProduction
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -181,7 +181,7 @@ Resources:
   
   PrivateRouteNoNat1:
     Type: AWS::EC2::Route
-    Condition: NotUseNatGatewayCondition
+    Condition: NotProduction
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -189,12 +189,36 @@ Resources:
 
   PrivateRouteNoNat2:
     Type: AWS::EC2::Route
-    Condition: NotUseNatGatewayCondition
+    Condition: NotProduction
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+      
+  # 6. Subnet Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
 
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
 Outputs:
   VPCId:
     Description: VPC ID
