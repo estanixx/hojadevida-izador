@@ -9,9 +9,9 @@ import ExperienceStep from './steps/ExperienceStep';
 import LanguagesStep from './steps/LanguagesStep';
 import PersonalInfoStep from './steps/PersonalInfoStep';
 import SkillsStep from './steps/SkillsStep';
-
+import { v4 as uuidv4 } from 'uuid';
 const createEmptyExperience = (): ExperienceItem => ({
-  id: crypto.randomUUID(),
+  id: uuidv4(),
   enterpriseName: '',
   fromDate: '',
   toDate: '',
@@ -20,7 +20,7 @@ const createEmptyExperience = (): ExperienceItem => ({
 });
 
 const createEmptyLanguage = (): LanguageItem => ({
-  id: crypto.randomUUID(),
+  id: uuidv4(),
   language: '',
   proficiencyLevel: '',
 });
