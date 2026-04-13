@@ -166,17 +166,21 @@ jobs:
         working-directory: backend
         run: sam build --use-container
 
-      - name: Deploy backend with SAM
-        working-directory: backend
-        run: |
-          sam deploy \
-            --stack-name hojadevida-backend-${{ needs.determine-env.outputs.environment }} \
-            --parameter-overrides \
-              Environment=${{ needs.determine-env.outputs.environment }} \
-            --region ${{ env.AWS_REGION }} \
-            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset
+       - name: Deploy backend with SAM
+         working-directory: backend
+         env:
+           AWS_ACCOUNT_ID: '871696174477'
+           ENV: ${{ needs.determine-env.outputs.environment }}
+         run: |
+           sam deploy \
+             --stack-name hojadevida-backend-${{ needs.determine-env.outputs.environment }} \
+             --s3-bucket hojadevida-sam-artifacts-${AWS_ACCOUNT_ID}-${ENV} \
+             --parameter-overrides \
+               Environment=${{ needs.determine-env.outputs.environment }} \
+             --region ${{ env.AWS_REGION }} \
+             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+             --no-confirm-changeset \
+             --no-fail-on-empty-changeset
 
       - name: Get SAM Outputs
         id: sam-outputs
