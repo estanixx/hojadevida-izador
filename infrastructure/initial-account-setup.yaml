@@ -59,16 +59,20 @@ Resources:
    # ============================================================================
    # 2. ECR Repository for Frontend
    # ============================================================================
-   # NOTE: ECR repository is managed outside CloudFormation
-   # It should be pre-created or managed separately
-   # Reference it as needed via AWS CLI: aws ecr describe-repositories
+
+   ECRRepository:
+     Type: AWS::ECR::Repository
+     Properties:
+       RepositoryName: !Ref ECRRepositoryName
+       ImageScanningConfiguration:
+         ScanOnPush: true
 
    # ============================================================================
    # 3. Terraform State Infrastructure (Dev & Prod)
    # ============================================================================
 
-  # Dev Environment State Bucket
-  TerraformStateDevBucket:
+   # Dev Environment State Bucket
+   TerraformStateDevBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-dev'
@@ -188,8 +192,8 @@ Outputs:
       Name: Hojadevida-GitHubOIDCRoleArn
 
    ECRRepositoryUri:
-     Description: URI of the ECR repository (hojadevida-frontend)
-     Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/hojadevida-frontend'
+     Description: URI of the ECR repository
+     Value: !GetAtt ECRRepository.RepositoryUri
      Export:
        Name: Hojadevida-ECRRepositoryUri
 
