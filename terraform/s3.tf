@@ -152,85 +152,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "cvs" {
 # ============================================================================
 # Terraform State Bucket
 # ============================================================================
-# Stores Terraform state files with versioning and encryption.
-# Separate from CVs bucket to isolate infrastructure state.
+# NOTE: Terraform state bucket is managed by CloudFormation (initial-account-setup.yaml)
+# to enable account-level management independent of Terraform state.
+# This ensures Terraform can always access its backend even during infrastructure changes.
 #
-# Design rationale:
-# - Account-scoped naming for multi-account safety
-# - Versioning enables state recovery from failed applies
-# - Encryption protects sensitive resource IDs, keys, etc.
-# - Lifecycle: retain 30 days of state versions (configurable)
-
-resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.app_name}-terraform-state-${data.aws_caller_identity.current.account_id}-${var.environment}"
-
-  tags = {
-    Name        = "${var.app_name}-terraform-state-bucket"
-    Description = "Stores Terraform state files"
-    Component   = "Terraform"
-  }
-}
-
-# ========================================================================
-# Block All Public Access (Terraform State)
-# ========================================================================
-# Critical: Terraform state contains sensitive data (database passwords,
-# AWS credentials, API keys, etc.). Must never be public.
-
-resource "aws_s3_bucket_public_access_block" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# ========================================================================
-# Versioning Configuration (Terraform State)
-# ========================================================================
-# Enables rollback of infrastructure state to previous versions
-
-resource "aws_s3_bucket_versioning" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# ========================================================================
-# Server-Side Encryption Configuration (Terraform State)
-# ========================================================================
-# Encrypts state files at rest with AES256
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# ========================================================================
-# Lifecycle Configuration (Terraform State)
-# ========================================================================
-# Retains 30 days of old state versions before deletion.
-# Prevents unnecessary storage growth from state churn.
-
-resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  rule {
-    id     = "RetainStateVersions"
-    status = "Enabled"
-    filter {}
-
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
-  }
-}
+# CloudFormation-managed resource:
+# - S3 Bucket: hojadevida-terraform-state-{account-id}-{env}
+# - DynamoDB Lock Table: hojadevida-terraform-locks-{account-id}-{env}
+# - Accessed via: -backend-config flags in terraform init
 

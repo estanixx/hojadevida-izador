@@ -83,38 +83,11 @@ resource "aws_dynamodb_table" "cvs" {
 # ============================================================================
 # DynamoDB Table for Terraform State Locks
 # ============================================================================
-# Required for distributed state locking when multiple team members
-# or CI/CD pipelines run Terraform simultaneously.
+# NOTE: Terraform locks table is managed by CloudFormation (initial-account-setup.yaml)
+# to enable account-level management independent of Terraform state.
+# This ensures Terraform can always access its lock mechanism even during infrastructure changes.
 #
-# Design rationale:
-# - PAY_PER_REQUEST eliminates need for capacity planning
-# - SSE enabled for state lock data security
-# - Simple schema: LockID is the only key needed
-
-resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "${var.app_name}-terraform-locks-${var.environment}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  # ========================================================================
-  # Attributes
-  # ========================================================================
-  # LockID is the only required attribute for state locking
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  # ========================================================================
-  # Tags
-  # ========================================================================
-  # Internal infrastructure table - minimal tagging needed
-
-  tags = {
-    Name        = "${var.app_name}-terraform-locks"
-    Description = "State locking for Terraform distributed operations"
-    Component   = "Terraform"
-  }
-}
+# CloudFormation-managed resource:
+# - DynamoDB Table: hojadevida-terraform-locks-{account-id}-{env}
+# - Accessed via: -backend-config flags in terraform init
 

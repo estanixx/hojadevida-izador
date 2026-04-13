@@ -70,7 +70,7 @@ resource "aws_iam_role_policy" "lambda_execution_policy" {
           "dynamodb:GetItem",
           "dynamodb:Query"
         ]
-        Resource = var.dynamodb_cvs_table_arn
+        Resource = aws_dynamodb_table.cvs.arn
       },
       # ======================================================================
       # S3 Permissions
@@ -82,7 +82,7 @@ resource "aws_iam_role_policy" "lambda_execution_policy" {
           "s3:PutObject",
           "s3:GetObject"
         ]
-        Resource = "${var.s3_cvs_bucket_arn}/*"
+        Resource = "${aws_s3_bucket.cvs.arn}/*"
       },
       # ======================================================================
       # Bedrock Permissions
@@ -203,12 +203,12 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "S3FrontendAssets"
+        Sid    = "S3CVsAssets"
         Effect = "Allow"
         Action = [
           "s3:GetObject"
         ]
-        Resource = "${var.s3_cvs_bucket_arn}/*"
+        Resource = "${aws_s3_bucket.cvs.arn}/*"
       }
     ]
   })
@@ -217,18 +217,18 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
 # ============================================================================
 # GitHub OIDC Provider
 # ============================================================================
-# Federated identity provider for GitHub Actions to assume AWS roles without
-# long-lived credentials. Establishes trust relationship with GitHub's OIDC endpoint.
+# NOTE: GitHub OIDC Provider is managed by CloudFormation (initial-account-setup.yaml)
+# as an account-level resource. We reference it here using a data source.
+#
+# CloudFormation-managed resource:
+# - OIDC Provider: https://token.actions.githubusercontent.com
+# - ARN: arn:aws:iam::{account-id}:oidc-provider/token.actions.githubusercontent.com
+#
+# This ensures the provider exists at account level, independent of Terraform state,
+# and allows environment-specific roles to reference it.
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-
-  tags = {
-    Name        = "${var.app_name}-github-oidc-provider"
-    Description = "GitHub Actions OIDC provider for CI/CD"
-  }
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # ============================================================================
@@ -236,6 +236,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # ============================================================================
 # IAM role that GitHub Actions assumes via OIDC. Allows CI/CD pipeline to
 # deploy Terraform, Lambda functions, and ECS task definitions.
+# References the CloudFormation-managed OIDC provider above.
 
 resource "aws_iam_role" "github_oidc_role" {
   name = "${var.app_name}-github-oidc-role-${var.environment}"
@@ -245,7 +246,7 @@ resource "aws_iam_role" "github_oidc_role" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = data.aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
