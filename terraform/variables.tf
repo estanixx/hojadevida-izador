@@ -140,9 +140,52 @@ variable "ecs_task_port" {
   default     = 3000
 }
 
+# VPC and Networking Configuration
+variable "vpc_cidr_block" {
+  description = "CIDR block for the VPC"
+  type        = string
+  default     = "10.16.0.0/16"
+}
+
+variable "public_subnet_1_cidr" {
+  description = "CIDR block for public subnet 1"
+  type        = string
+  default     = "10.16.32.0/20"
+}
+
+variable "public_subnet_2_cidr" {
+  description = "CIDR block for public subnet 2"
+  type        = string
+  default     = "10.16.48.0/20"
+}
+
+variable "private_subnet_1_cidr" {
+  description = "CIDR block for private subnet 1"
+  type        = string
+  default     = "10.16.0.0/20"
+}
+
+variable "private_subnet_2_cidr" {
+  description = "CIDR block for private subnet 2"
+  type        = string
+  default     = "10.16.16.0/20"
+}
+
+variable "application_name" {
+  description = "Application name for resource naming (alias for app_name)"
+  type        = string
+  default     = "hojadevida"
+}
+
 # ALB Configuration
 variable "alb_enable_deletion_protection" {
   description = "Enable deletion protection on ALB"
+  type        = bool
+  default     = false
+}
+
+variable "enable_https_alb" {
+  description = "Enable HTTPS (443) on ALB in addition to HTTP (80)"
   type        = bool
   default     = false
 }

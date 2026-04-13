@@ -129,6 +129,26 @@ output "private_subnet_ids" {
   value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
 }
 
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "nat_gateway_eips" {
+  description = "Elastic IPs of NAT Gateways (if enabled)"
+  value       = var.enable_nat_gateway ? aws_eip.nat_1[*].public_ip : []
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID for ALB"
+  value       = aws_security_group.alb.id
+}
+
+output "ecs_security_group_id" {
+  description = "Security group ID for ECS tasks"
+  value       = aws_security_group.ecs.id
+}
+
 # IAM Outputs
 output "lambda_execution_role_arn" {
   description = "ARN of Lambda execution role"
