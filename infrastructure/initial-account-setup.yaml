@@ -70,9 +70,66 @@ Resources:
   # ============================================================================
   # 3. Terraform State Infrastructure (Dev & Prod)
   # ============================================================================
-  # NOTE: Terraform state S3 buckets and DynamoDB lock tables are created
-  # manually and managed outside CloudFormation to avoid conflicts.
-  # They are referenced by Terraform via environment-specific backend configs.
+
+  # Dev Environment State Bucket
+  TerraformStateDevBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-dev'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Prod Environment State Bucket
+  TerraformStateProdBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-prod'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Dev Environment DynamoDB Lock Table
+  TerraformLocksDevTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'hojadevida-terraform-locks-${AccountId}-dev'
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # Prod Environment DynamoDB Lock Table
+  TerraformLocksProdTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'hojadevida-terraform-locks-${AccountId}-prod'
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
 
   # ============================================================================
   # 4. SAM Artifact Buckets (Dev & Prod)
@@ -132,6 +189,31 @@ Outputs:
     Value: !GetAtt ECRRepository.RepositoryUri
     Export:
       Name: Hojadevida-ECRRepositoryUri
+
+  # Terraform State Outputs
+  TerraformStateDevBucketName:
+    Description: Name of the dev Terraform state bucket
+    Value: !Ref TerraformStateDevBucket
+    Export:
+      Name: Hojadevida-TerraformStateDevBucket
+
+  TerraformStateProdBucketName:
+    Description: Name of the prod Terraform state bucket
+    Value: !Ref TerraformStateProdBucket
+    Export:
+      Name: Hojadevida-TerraformStateProdBucket
+
+  TerraformLocksDevTableName:
+    Description: Name of the dev Terraform locks table
+    Value: !Ref TerraformLocksDevTable
+    Export:
+      Name: Hojadevida-TerraformLocksDevTable
+
+  TerraformLocksProdTableName:
+    Description: Name of the prod Terraform locks table
+    Value: !Ref TerraformLocksProdTable
+    Export:
+      Name: Hojadevida-TerraformLocksProdTable
 
   # SAM Artifact Bucket Outputs
   SAMArtifactDevBucketName:
