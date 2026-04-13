@@ -129,7 +129,7 @@ jobs:
           retention-days: 7
 
   # ============================================================================
-  # Deploy Backend (Lambda functions)
+  # Deploy Backend (Lambda functions with SAM)
   # ============================================================================
   backend-deploy:
     needs:
@@ -159,56 +159,42 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-backend-deploy
 
-      - name: Install backend dependencies
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build backend with SAM
         working-directory: backend
-        run: npm ci
+        run: sam build --use-container
 
-      - name: Build backend (zip for Lambda)
-        working-directory: backend
-        run: |
-          # Create deployment package
-          zip -r lambda-handler.zip . \
-            -x "*.git*" \
-            -x "node_modules/.bin/*" \
-            -x ".env*" \
-            -x "*.md"
-
-      - name: Get Lambda function names from Terraform outputs
-        id: lambda-names
-        run: |
-          # These should match your Terraform outputs
-          # Fallback to environment-based names if outputs not available
-          ENV_SUFFIX="${{ needs.determine-env.outputs.environment }}"
-          echo "list_cvs_function=hojadevida-listCvs-${ENV_SUFFIX}" >> $GITHUB_OUTPUT
-          echo "generate_cv_function=hojadevida-generateCv-${ENV_SUFFIX}" >> $GITHUB_OUTPUT
-
-      - name: Deploy listCvs Lambda function
+      - name: Deploy backend with SAM
         working-directory: backend
         run: |
-          aws lambda update-function-code \
-            --function-name ${{ steps.lambda-names.outputs.list_cvs_function }} \
-            --zip-file fileb://lambda-handler.zip \
-            --region ${{ env.AWS_REGION }}
-          
-          # Wait for update to complete
-          aws lambda wait function-updated \
-            --function-name ${{ steps.lambda-names.outputs.list_cvs_function }} \
-            --region ${{ env.AWS_REGION }}
-        continue-on-error: true
+          sam deploy \
+            --stack-name hojadevida-backend-${{ needs.determine-env.outputs.environment }} \
+            --parameter-overrides \
+              Environment=${{ needs.determine-env.outputs.environment }} \
+            --region ${{ env.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
 
-      - name: Deploy generateCv Lambda function
+      - name: Get SAM Outputs
+        id: sam-outputs
         working-directory: backend
         run: |
-          aws lambda update-function-code \
-            --function-name ${{ steps.lambda-names.outputs.generate_cv_function }} \
-            --zip-file fileb://lambda-handler.zip \
-            --region ${{ env.AWS_REGION }}
-          
-          # Wait for update to complete
-          aws lambda wait function-updated \
-            --function-name ${{ steps.lambda-names.outputs.generate_cv_function }} \
-            --region ${{ env.AWS_REGION }}
-        continue-on-error: true
+          aws cloudformation describe-stacks \
+            --stack-name hojadevida-backend-${{ needs.determine-env.outputs.environment }} \
+            --query 'Stacks[0].Outputs' \
+            --region ${{ env.AWS_REGION }} > sam-outputs.json
+          cat sam-outputs.json
+          echo "outputs_file=sam-outputs.json" >> $GITHUB_OUTPUT
+
+      - name: Upload SAM Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
+          path: backend/sam-outputs.json
+          retention-days: 7
 
   # ============================================================================
   # Deploy Frontend (ECS + Docker image)

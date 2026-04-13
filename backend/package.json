@@ -2,10 +2,19 @@
   "name": "hojadevida-izador-backend",
   "version": "1.0.0",
   "private": true,
-  "main": "handler.js",
+  "description": "Backend Lambda functions for hojadevida-izador using AWS SAM",
+  "main": "src/index.js",
   "scripts": {
-    "deploy:prod": "serverless deploy --stage prod"
+    "build": "sam build",
+    "deploy:dev": "sam deploy --stack-name hojadevida-backend-dev --parameter-overrides Environment=dev --no-confirm-changeset",
+    "deploy:prod": "sam deploy --stack-name hojadevida-backend-prod --parameter-overrides Environment=prod --no-confirm-changeset"
   },
+  "keywords": [
+    "aws",
+    "lambda",
+    "sam",
+    "serverless"
+  ],
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.917.0",
     "@aws-sdk/client-dynamodb": "^3.917.0",

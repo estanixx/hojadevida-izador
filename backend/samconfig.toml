@@ -1,0 +1,35 @@
+# SAM Configuration File
+# Defines default parameters for sam build and sam deploy commands
+
+version = 0.1
+
+[default]
+[default.build]
+# Use container for consistent builds across environments
+container_build = true
+
+[default.build.parameters]
+use_container = true
+
+[default.deploy]
+[default.deploy.parameters]
+# General deployment parameters
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+no_fail_on_empty_changeset = true
+
+# Verbosity
+disable_rollback = true
+
+[dev]
+[dev.deploy]
+[dev.deploy.parameters]
+stack_name = "hojadevida-backend-dev"
+parameter_overrides = ["Environment=dev"]
+
+[prod]
+[prod.deploy]
+[prod.deploy.parameters]
+stack_name = "hojadevida-backend-prod"
+parameter_overrides = ["Environment=prod"]

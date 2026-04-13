@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  hojadevida-izador Backend - SAM Template
+  Defines Lambda functions, API Gateway integration, DynamoDB, S3, and Cognito
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        CVS_TABLE: !Ref CvsDynamoDbTable
+        CVS_BUCKET: !Ref CvsS3Bucket
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # ============================================================================
+  # Lambda Functions
+  # ============================================================================
+
+  # List CVs Function
+  ListCvsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'hojadevida-list-cvs-${Environment}'
+      CodeUri: src/list_cvs/
+      Handler: index.handler
+      Description: List CVs for authenticated user
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CvsDynamoDbTable
+        - S3ReadPolicy:
+            BucketName: !Ref CvsS3Bucket
+      Events:
+        GetCvs:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /cvs
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  # Generate CV Function
+  GenerateCvFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'hojadevida-generate-cv-${Environment}'
+      CodeUri: src/generate_cv/
+      Handler: index.handler
+      Description: Generate CV using Bedrock
+      Timeout: 60
+      MemorySize: 512
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CvsDynamoDbTable
+        - S3CrudPolicy:
+            BucketName: !Ref CvsS3Bucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+      Events:
+        GenerateCv:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /cvs/generate
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  # ============================================================================
+  # API Gateway (HTTP API)
+  # ============================================================================
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub 'hojadevida-api-${Environment}'
+      StageName: !Ref Environment
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+            Identity:
+              ReusableArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/authorizers/${CognitoAuthorizer}'
+      CorsPolicy:
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowOrigins:
+          - '*'
+
+  # Cognito Authorizer for HTTP API
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: CognitoAuthorizer
+      IdentitySource: $request.header.Authorization
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoUserPoolClient
+        Issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+
+  # ============================================================================
+  # DynamoDB Table
+  # ============================================================================
+
+  CvsDynamoDbTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'hojadevida-cvs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: cvId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: cvId
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # S3 Bucket for CVs
+  # ============================================================================
+
+  CvsS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-cvs-${AWS::AccountId}-${Environment}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Cognito User Pool & Client
+  # ============================================================================
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'hojadevida-users-${Environment}'
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+      AutoVerifiedAttributes:
+        - email
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub 'hojadevida-web-${Environment}'
+      UserPoolId: !Ref CognitoUserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - http://localhost:3000
+        - !If
+          - IsProd
+          - !Sub 'https://${Environment}.hojadevida.com'
+          - !Sub 'https://${Environment}.localhost:3000'
+      LogoutURLs:
+        - http://localhost:3000/logout
+        - !If
+          - IsProd
+          - !Sub 'https://${Environment}.hojadevida.com/logout'
+          - !Sub 'https://${Environment}.localhost:3000/logout'
+      SupportedIdentityProviders:
+        - COGNITO
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+
+Outputs:
+  HttpApiEndpoint:
+    Description: HTTP API endpoint URL
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub 'Hojadevida-HttpApiEndpoint-${Environment}'
+
+  ListCvsFunctionArn:
+    Description: ARN of the List CVs Lambda function
+    Value: !GetAtt ListCvsFunction.Arn
+    Export:
+      Name: !Sub 'Hojadevida-ListCvsFunction-${Environment}'
+
+  GenerateCvFunctionArn:
+    Description: ARN of the Generate CV Lambda function
+    Value: !GetAtt GenerateCvFunction.Arn
+    Export:
+      Name: !Sub 'Hojadevida-GenerateCvFunction-${Environment}'
+
+  CvsDynamoDbTableName:
+    Description: DynamoDB Table name for CVs
+    Value: !Ref CvsDynamoDbTable
+    Export:
+      Name: !Sub 'Hojadevida-CvsDynamoDbTable-${Environment}'
+
+  CvsS3BucketName:
+    Description: S3 Bucket name for CVs
+    Value: !Ref CvsS3Bucket
+    Export:
+      Name: !Sub 'Hojadevida-CvsS3Bucket-${Environment}'
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub 'Hojadevida-UserPoolId-${Environment}'
+
+  CognitoUserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub 'Hojadevida-UserPoolClientId-${Environment}'
+
+  CognitoUserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt CognitoUserPool.Arn
+    Export:
+      Name: !Sub 'Hojadevida-UserPoolArn-${Environment}'

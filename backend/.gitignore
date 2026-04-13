@@ -1,2 +1,30 @@
+# Serverless Framework (old)
+.serverless/
 node_modules
-.serverless
+.env
+.env.local
+
+# SAM build
+.aws-sam/
+sam-tests/
+
+# Build artifacts
+dist/
+build/
+*.zip
+sam-outputs.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
