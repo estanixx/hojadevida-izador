@@ -27,6 +27,7 @@ jobs:
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       tf_vars_file: ${{ steps.env.outputs.tf_vars_file }}
+      backend_config: ${{ steps.env.outputs.backend_config }}
     steps:
       - name: Determine environment from target branch
         id: env
@@ -34,12 +35,15 @@ jobs:
           if [[ "${{ github.base_ref }}" == "main" ]]; then
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+            echo "backend_config=backend-dev.hcl" >> $GITHUB_OUTPUT
           elif [[ "${{ github.base_ref }}" == "prod" ]]; then
             echo "environment=prod" >> $GITHUB_OUTPUT
             echo "tf_vars_file=terraform/terraform.prod.tfvars" >> $GITHUB_OUTPUT
+            echo "backend_config=backend-prod.hcl" >> $GITHUB_OUTPUT
           else
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+            echo "backend_config=backend-dev.hcl" >> $GITHUB_OUTPUT
           fi
 
   # ============================================================================
@@ -72,11 +76,7 @@ jobs:
           ENV: ${{ needs.determine-env.outputs.environment }}
         run: |
           terraform init \
-            -backend-config="bucket=hojadevida-terraform-state-${AWS_ACCOUNT_ID}-${ENV}" \
-            -backend-config="key=hojadevida.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="dynamodb_table=hojadevida-terraform-locks-${AWS_ACCOUNT_ID}-${ENV}" \
-            -backend-config="encrypt=true"
+            -backend-config="${{ needs.determine-env.outputs.backend_config }}"
 
       - name: Terraform Validate
         working-directory: terraform
