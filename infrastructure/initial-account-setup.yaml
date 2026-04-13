@@ -56,20 +56,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
 
-  # ============================================================================
-  # 2. ECR Repository for Frontend
-  # ============================================================================
+   # ============================================================================
+   # 2. ECR Repository for Frontend
+   # ============================================================================
+   # NOTE: ECR repository is managed outside CloudFormation
+   # It should be pre-created or managed separately
+   # Reference it as needed via AWS CLI: aws ecr describe-repositories
 
-  ECRRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Ref ECRRepositoryName
-      ImageScanningConfiguration:
-        ScanOnPush: true
-
-  # ============================================================================
-  # 3. Terraform State Infrastructure (Dev & Prod)
-  # ============================================================================
+   # ============================================================================
+   # 3. Terraform State Infrastructure (Dev & Prod)
+   # ============================================================================
 
   # Dev Environment State Bucket
   TerraformStateDevBucket:
@@ -129,7 +125,7 @@ Resources:
       KeySchema:
         - AttributeName: LockID
           KeyType: HASH
-       BillingMode: PAY_PER_REQUEST
+      BillingMode: PAY_PER_REQUEST
 
    # ============================================================================
    # 4. SAM Artifact Bucket (Dev & Prod)
@@ -137,7 +133,7 @@ Resources:
    # S3 bucket for SAM to store Lambda deployment artifacts during sam deploy
    # Referenced in sam deploy command via --s3-bucket parameter
 
-   SAMArtifactDevBucket:
+  SAMArtifactDevBucket:
      Type: AWS::S3::Bucket
      Properties:
        BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-dev'
@@ -154,7 +150,7 @@ Resources:
          - Key: Environment
            Value: dev
 
-   SAMArtifactProdBucket:
+  SAMArtifactProdBucket:
      Type: AWS::S3::Bucket
      Properties:
        BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-prod'
@@ -191,11 +187,11 @@ Outputs:
     Export:
       Name: Hojadevida-GitHubOIDCRoleArn
 
-  ECRRepositoryUri:
-    Description: URI of the ECR repository
-    Value: !GetAtt ECRRepository.RepositoryUri
-    Export:
-      Name: Hojadevida-ECRRepositoryUri
+   ECRRepositoryUri:
+     Description: URI of the ECR repository (hojadevida-frontend)
+     Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/hojadevida-frontend'
+     Export:
+       Name: Hojadevida-ECRRepositoryUri
 
   # Terraform State Outputs
   TerraformStateDevBucketName:
@@ -216,20 +212,20 @@ Outputs:
     Export:
       Name: Hojadevida-TerraformLocksDevTable
 
-   TerraformLocksProdTableName:
+  TerraformLocksProdTableName:
      Description: Name of the prod Terraform locks table
      Value: !Ref TerraformLocksProdTable
      Export:
        Name: Hojadevida-TerraformLocksProdTable
 
-   # SAM Artifact Bucket Outputs
-   SAMArtifactDevBucketName:
+  # SAM Artifact Bucket Outputs
+  SAMArtifactDevBucketName:
      Description: Name of the dev SAM artifact bucket
      Value: !Ref SAMArtifactDevBucket
      Export:
        Name: Hojadevida-SAMArtifactDevBucket
 
-   SAMArtifactProdBucketName:
+  SAMArtifactProdBucketName:
      Description: Name of the prod SAM artifact bucket
      Value: !Ref SAMArtifactProdBucket
      Export:
