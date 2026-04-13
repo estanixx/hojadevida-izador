@@ -113,20 +113,22 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
 }
 
 # ============================================================================
-# GitHub OIDC Provider
+# Data Sources for CloudFormation-Managed Resources
 # ============================================================================
-# NOTE: GitHub OIDC Provider is managed by CloudFormation (initial-account-setup.yaml)
-# as an account-level resource. We reference it here using a data source.
-#
-# CloudFormation-managed resource:
-# - OIDC Provider: https://token.actions.githubusercontent.com
-# - ARN: arn:aws:iam::{account-id}:oidc-provider/token.actions.githubusercontent.com
-#
-# This ensures the provider exists at account level, independent of Terraform state,
-# and allows environment-specific roles to reference it.
+# These data sources reference account-level resources created by CloudFormation
+# (initial-account-setup.yaml) without importing them into Terraform state.
+# This keeps CloudFormation and Terraform resources cleanly separated.
 
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
+}
+
+data "aws_s3_bucket" "terraform_state" {
+  bucket = "hojadevida-terraform-state-${data.aws_caller_identity.current.account_id}-${var.environment}"
+}
+
+data "aws_dynamodb_table" "terraform_locks" {
+  name = "hojadevida-terraform-locks-${data.aws_caller_identity.current.account_id}-${var.environment}"
 }
 
 # ============================================================================
@@ -196,7 +198,7 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Resource = "${var.s3_terraform_state_bucket_arn}/*"
+        Resource = "${data.aws_s3_bucket.terraform_state.arn}/*"
       },
       # List bucket for state discovery
       {
@@ -205,7 +207,7 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
         Action = [
           "s3:ListBucket"
         ]
-        Resource = var.s3_terraform_state_bucket_arn
+        Resource = data.aws_s3_bucket.terraform_state.arn
       },
       # ======================================================================
       # Terraform State Locking (DynamoDB)
@@ -221,7 +223,7 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
           "dynamodb:Query",
           "dynamodb:DescribeTable"
         ]
-        Resource = var.dynamodb_terraform_locks_table_arn
+        Resource = data.aws_dynamodb_table.terraform_locks.arn
       },
       # ======================================================================
       # CloudFormation (Full access for now, will be scoped in future phases)
