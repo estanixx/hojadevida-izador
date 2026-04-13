@@ -140,6 +140,12 @@ variable "ecs_task_port" {
   default     = 3000
 }
 
+variable "ecs_task_image_uri" {
+  description = "ECR image URI for ECS task (optional, defaults to auto-generated)"
+  type        = string
+  default     = null
+}
+
 # VPC and Networking Configuration
 variable "vpc_cidr_block" {
   description = "CIDR block for the VPC"
