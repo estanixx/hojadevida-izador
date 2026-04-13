@@ -1,129 +1,46 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Initial account setup for GitHub OIDC and ECR Repository
+Description: >
+  Initial account setup for hojadevida-izador:
+  - GitHub OIDC Provider and Role for CI/CD
+  - ECR Repository for frontend Docker images
+  - Terraform state S3 buckets (dev & prod)
+  - Terraform state DynamoDB lock tables (dev & prod)
+  - API Gateway endpoints (dev & prod)
+
 Parameters:
   GitHubOrg:
     Type: String
-    Description: The GitHub organization name (e.g., "my-org")
+    Description: The GitHub organization name
     Default: estanixx
   GitHubRepo:
     Type: String
-    Description: The GitHub repository name (e.g., "my-repo")
+    Description: The GitHub repository name
     Default: hojadevida-izador
   ECRRepositoryName:
     Type: String
     Description: Name of the ECR repository for the frontend application
-    Default: my-frontend-app
+    Default: hojadevida-frontend
+  AccountId:
+    Type: String
+    Description: AWS Account ID
+    Default: '871696174477'
+
 Resources:
-  # 1. Github OIDC Provider and Role for CI/CD
+  # ============================================================================
+  # 1. GitHub OIDC Provider and Role for CI/CD
+  # ============================================================================
+
   GitHubOIDCProvider:
     Type: AWS::IAM::OIDCProvider
     Properties:
       Url: https://token.actions.githubusercontent.com
       ClientIdList:
         - sts.amazonaws.com
-      Tags:
-        - Key: Name
-          Value: GitHub OIDC Provider
-        - Key: GitHubOrg
-          Value: !Ref GitHubOrg
-        - Key: GitHubRepo
-          Value: !Ref GitHubRepo
-
-  PipelinePermissionsBoundary:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: PipelinePermissionsBoundary
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          # 1. Allow standard operations your apps actually need
-          - Effect: Allow
-            Action:
-              - '*'
-            Resource: '*'
-
-          # 2. Deny creating or modifying IAM Users/Keys
-          - Effect: Deny
-            Action:
-              - iam:CreateUser
-              - iam:CreateAccessKey
-              - iam:UpdateAssumeRolePolicy
-            Resource: '*'
-
-          # 3. Deny modifying the boundary itself
-          - Effect: Deny
-            Action:
-              - iam:DeletePolicy
-              - iam:CreatePolicyVersion
-              - iam:DeletePolicyVersion
-              - iam:SetDefaultPolicyVersion
-            Resource: !Sub arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary
-
-  GithubOIDCProviderPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: GitHubOIDCProviderPolicy
-      Roles:
-        - !Ref GitHubOIDCProviderRole
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              # Existing
-              - s3:*
-              - ecs:*
-              # Networking (VPCs, Subnets, NAT, Route Tables)
-              - elasticloadbalancing:*
-              - ec2:*
-
-              # SAM & CloudFormation Core
-              - cloudformation:*
-              - lambda:*
-              - apigateway:*
-
-              # Database & Auth
-              - dynamodb:*
-              - cognito-idp:*
-
-              # Observability & Registry
-              - logs:*
-              - ecr:*
-            Resource:
-              - '*'
-            # 1. Restrict Role Creation: Must attach the boundary
-          - Effect: Allow
-            Action:
-              - iam:CreateRole
-              - iam:DeleteRole
-              - iam:AttachRolePolicy
-              - iam:DetachRolePolicy
-              - iam:PutRolePermissionsBoundary
-            Resource: '*'
-            Condition:
-              StringEquals:
-                iam:PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/PipelinePermissionsBoundary
-
-          # 1b. Allow tagging on roles (CloudFormation commonly tags IAM resources on create)
-          - Effect: Allow
-            Action:
-              - iam:TagRole
-              - iam:UntagRole
-            Resource: '*'
-
-          # 2. Allow passing roles to services (needed for ECS/Lambda)
-          - Effect: Allow
-            Action:
-              - iam:PassRole
-              - iam:GetRole
-              - iam:GetRolePolicy
-            Resource: '*'
 
   GitHubOIDCProviderRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: GitHubOIDCRole
-      PermissionsBoundary: !Ref PipelinePermissionsBoundary
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -135,43 +52,184 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${GitHubRepo}:*
-      Tags:
-        - Key: Name
-          Value: GitHub OIDC Role
-        - Key: GitHubOrg
-          Value: !Ref GitHubOrg
-        - Key: GitHubRepo
-          Value: !Ref GitHubRepo
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
 
+  # ============================================================================
   # 2. ECR Repository for Frontend
+  # ============================================================================
+
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Ref ECRRepositoryName
       ImageScanningConfiguration:
         ScanOnPush: true
-      Tags:
-        - Key: Name
-          Value: Frontend ECR Repository
+
+  # ============================================================================
+  # 3. Terraform State Infrastructure (Dev & Prod)
+  # ============================================================================
+
+  # Dev Environment State Bucket
+  TerraformStateDevBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-dev'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Prod Environment State Bucket
+  TerraformStateProdBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-prod'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Dev Environment DynamoDB Lock Table
+  TerraformLocksDevTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'hojadevida-terraform-locks-${AccountId}-dev'
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # Prod Environment DynamoDB Lock Table
+  TerraformLocksProdTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'hojadevida-terraform-locks-${AccountId}-prod'
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # ============================================================================
+  # 4. API Gateway Endpoints (Dev & Prod)
+  # ============================================================================
+
+  # Dev API Gateway
+  DevApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: hojadevida-api-dev
+      ProtocolType: HTTP
+
+  # Dev API Stage
+  DevApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref DevApiGateway
+      StageName: dev
+      AutoDeploy: true
+
+  # Prod API Gateway
+  ProdApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: hojadevida-api-prod
+      ProtocolType: HTTP
+
+  # Prod API Stage
+  ProdApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ProdApiGateway
+      StageName: prod
+      AutoDeploy: true
+
 Outputs:
   OIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider
     Value: !Ref GitHubOIDCProvider
     Export:
       Name: Hojadevida-GitHubOIDCProviderArn
+
   OIDCRoleArn:
     Description: ARN of the GitHub OIDC Role
     Value: !GetAtt GitHubOIDCProviderRole.Arn
     Export:
       Name: Hojadevida-GitHubOIDCRoleArn
+
   ECRRepositoryUri:
-    Description: URI of the ECR repository for the frontend application
+    Description: URI of the ECR repository
     Value: !GetAtt ECRRepository.RepositoryUri
     Export:
       Name: Hojadevida-ECRRepositoryUri
-  ECRRepositoryName:
-    Description: Name of the ECR repository for the frontend application
-    Value: !Ref ECRRepositoryName
+
+  # Terraform State Outputs
+  TerraformStateDevBucketName:
+    Description: Name of the dev Terraform state bucket
+    Value: !Ref TerraformStateDevBucket
     Export:
-      Name: Hojadevida-ECRRepositoryName
+      Name: Hojadevida-TerraformStateDevBucket
+
+  TerraformStateProdBucketName:
+    Description: Name of the prod Terraform state bucket
+    Value: !Ref TerraformStateProdBucket
+    Export:
+      Name: Hojadevida-TerraformStateProdBucket
+
+  TerraformLocksDevTableName:
+    Description: Name of the dev Terraform locks table
+    Value: !Ref TerraformLocksDevTable
+    Export:
+      Name: Hojadevida-TerraformLocksDevTable
+
+  TerraformLocksProdTableName:
+    Description: Name of the prod Terraform locks table
+    Value: !Ref TerraformLocksProdTable
+    Export:
+      Name: Hojadevida-TerraformLocksProdTable
+
+  # API Gateway Outputs
+  DevApiGatewayId:
+    Description: ID of the dev API Gateway
+    Value: !Ref DevApiGateway
+    Export:
+      Name: Hojadevida-DevApiGatewayId
+
+  DevApiEndpoint:
+    Description: Invoke URL of the dev API Gateway
+    Value: !Sub 'https://${DevApiGateway}.execute-api.${AWS::Region}.amazonaws.com/dev'
+    Export:
+      Name: Hojadevida-DevApiEndpoint
+
+  ProdApiGatewayId:
+    Description: ID of the prod API Gateway
+    Value: !Ref ProdApiGateway
+    Export:
+      Name: Hojadevida-ProdApiGatewayId
+
+  ProdApiEndpoint:
+    Description: Invoke URL of the prod API Gateway
+    Value: !Sub 'https://${ProdApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: Hojadevida-ProdApiEndpoint
