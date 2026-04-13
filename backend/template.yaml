@@ -104,13 +104,17 @@ Resources:
         AllowOrigins:
           - '*'
       Auth:
+        DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !GetAtt CognitoUserPool.Arn
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
             Identity:
-              ReusableArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/authorizers/${CognitoAuthorizer}'
+              IdentitySource: $request.header.Authorization
 
-  # Cognito Authorizer for HTTP API
+  # Cognito Authorizer for HTTP API (JWT-based)
   CognitoAuthorizer:
     Type: AWS::ApiGatewayV2::Authorizer
     Properties:
