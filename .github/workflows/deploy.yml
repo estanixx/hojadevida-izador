@@ -35,19 +35,19 @@ jobs:
       environment: ${{ steps.env.outputs.environment }}
       tf_vars_file: ${{ steps.env.outputs.tf_vars_file }}
     steps:
-      - name: Determine environment
-        id: env
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "environment=dev" >> $GITHUB_OUTPUT
-            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-            echo "tf_vars_file=terraform/terraform.prod.tfvars" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
-          fi
+       - name: Determine environment
+         id: env
+         run: |
+           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+             echo "environment=dev" >> $GITHUB_OUTPUT
+             echo "tf_vars_file=terraform.tfvars" >> $GITHUB_OUTPUT
+           elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
+             echo "environment=prod" >> $GITHUB_OUTPUT
+             echo "tf_vars_file=terraform.prod.tfvars" >> $GITHUB_OUTPUT
+           else
+             echo "environment=dev" >> $GITHUB_OUTPUT
+             echo "tf_vars_file=terraform.tfvars" >> $GITHUB_OUTPUT
+           fi
 
   # ============================================================================
   # Initialize Terraform & Deploy Infrastructure
