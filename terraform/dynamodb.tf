@@ -1,0 +1,149 @@
+# ============================================================================
+# DynamoDB Resources for Hojadevida-izador Application
+# ============================================================================
+#
+# This file defines all DynamoDB tables needed for:
+# - CVs Table: Main table storing CV metadata with GSI for date-based queries
+# - Terraform Locks Table: State locking mechanism for safe concurrent operations
+#
+# Billing mode is configurable (PAY_PER_REQUEST for dev, PROVISIONED for prod)
+# Point-in-time recovery is disabled per user requirements
+# ============================================================================
+
+# ============================================================================
+# Main CVs Table
+# ============================================================================
+# Primary table for storing CV metadata and document references.
+# Partition key: userId | Sort key: cvId
+# Enables efficient queries for all CVs by user and by creation date
+#
+# Design rationale:
+# - PAY_PER_REQUEST provides cost efficiency for variable workloads
+# - GSI on userId + createdAt enables date-based filtering (Phase 2+)
+# - All attributes projected to avoid additional queries
+# - TTL disabled (CVs are user-managed, not auto-expiring)
+# - PITR disabled per requirement, but can be enabled in production
+
+resource "aws_dynamodb_table" "cvs" {
+  name         = "${var.app_name}-cvs-${var.environment}"
+  billing_mode = var.dynamodb_billing_mode
+  hash_key     = "userId"
+  range_key    = "cvId"
+
+  # ========================================================================
+  # Attributes
+  # ========================================================================
+  # Define all attributes referenced in keys (hash/range and GSI keys)
+  # Additional attributes can be stored without declaration
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "cvId"
+    type = "S"
+  }
+
+  attribute {
+    name = "createdAt"
+    type = "S"
+  }
+
+  # ========================================================================
+  # Global Secondary Index: userIdCreatedAtGSI
+  # ========================================================================
+  # Enables queries like:
+  # - Get all CVs for a user ordered by creation date
+  # - Find CVs created within a date range
+  # - Support for pagination and sorting by date
+  # ALL projection includes all attributes to avoid fetches
+
+  global_secondary_index {
+    name            = "userIdCreatedAtGSI"
+    hash_key        = "userId"
+    range_key       = "createdAt"
+    projection_type = "ALL"
+  }
+
+  # ========================================================================
+  # Point-in-Time Recovery (PITR)
+  # ========================================================================
+  # Disabled per user requirement - CVs are not archival data
+  # Can be enabled in production if backup strategy changes
+
+  point_in_time_recovery_specification {
+    point_in_time_recovery_enabled = false
+  }
+
+  # ========================================================================
+  # Server-Side Encryption
+  # ========================================================================
+  # Uses AWS managed keys by default
+  # Can be upgraded to customer-managed keys in KMS for prod if needed
+
+  server_side_encryption_specification {
+    enabled = true
+  }
+
+  # ========================================================================
+  # Tags
+  # ========================================================================
+  # Applied automatically via provider default_tags
+  # Additional tags for clarity
+
+  tags = {
+    Name        = "${var.app_name}-cvs-table"
+    Description = "Stores CV metadata and document references"
+    Component   = "DataLayer"
+  }
+}
+
+# ============================================================================
+# DynamoDB Table for Terraform State Locks
+# ============================================================================
+# Required for distributed state locking when multiple team members
+# or CI/CD pipelines run Terraform simultaneously.
+#
+# Design rationale:
+# - PAY_PER_REQUEST eliminates need for capacity planning
+# - SSE enabled for state lock data security
+# - Simple schema: LockID is the only key needed
+
+resource "aws_dynamodb_table" "terraform_locks" {
+  name         = "${var.app_name}-terraform-locks-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  # ========================================================================
+  # Attributes
+  # ========================================================================
+  # LockID is the only required attribute for state locking
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  # ========================================================================
+  # Server-Side Encryption
+  # ========================================================================
+  # Enabled for securing lock state data
+
+  server_side_encryption_specification {
+    enabled = true
+  }
+
+  # ========================================================================
+  # Tags
+  # ========================================================================
+  # Internal infrastructure table - minimal tagging needed
+
+  tags = {
+    Name        = "${var.app_name}-terraform-locks"
+    Description = "State locking for Terraform distributed operations"
+    Component   = "Terraform"
+  }
+}
+
