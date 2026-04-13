@@ -111,8 +111,6 @@ Resources:
               audience:
                 - !Ref CognitoUserPoolClient
               issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
-            Identity:
-              IdentitySource: $request.header.Authorization
 
   # Cognito Authorizer for HTTP API (JWT-based)
   CognitoAuthorizer:
