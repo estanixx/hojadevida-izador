@@ -4,15 +4,19 @@ Parameters:
   ECRImageUri:
     Type: String
     Description: URI of the ECR image for the frontend application
-  
+
   Production:
     Type: String
     Description: Whether to use a NAT Gateway for private subnets
-    AllowedValues: [true, false]
+    AllowedValues:
+      - true
+      - false
     Default: false
 
 Conditions:
-  IsProduction: !Equals [!Ref Production, "true"]
+  IsProduction: !Equals
+    - !Ref Production
+    - 'true'
 Resources:
   # 1. Security Groups
   ALBSecurityGroup:
@@ -40,7 +44,6 @@ Resources:
       FromPort: 3000
       ToPort: 3000
       SourceSecurityGroupId: !Ref ALBSecurityGroup
-  
 
   # 2. Load Balancer and Target Group
   PublicLoadBalancer:
@@ -50,7 +53,8 @@ Resources:
       Subnets:
         - !ImportValue Hojadevida-PublicSubnet1
         - !ImportValue Hojadevida-PublicSubnet2
-      SecurityGroups: [!Ref ALBSecurityGroup]
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -144,7 +148,10 @@ Resources:
         AwsvpcConfiguration:
           SecurityGroups:
             - !Ref FrontendSecurityGroup
-          AssignPublicIp: !If [IsProduction, DISABLED, ENABLED]
+          AssignPublicIp: !If
+            - IsProduction
+            - DISABLED
+            - ENABLED
           Subnets:
             - !ImportValue Hojadevida-PrivateSubnet1
             - !ImportValue Hojadevida-PrivateSubnet2

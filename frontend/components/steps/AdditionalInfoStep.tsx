@@ -5,6 +5,7 @@ interface AdditionalInfoStepProps {
   onChange: (value: string) => void;
   onBack: () => void;
   onGenerate: () => void;
+  isGenerating?: boolean;
 }
 
 const inputStyles =
@@ -15,6 +16,7 @@ export default function AdditionalInfoStep({
   onChange,
   onBack,
   onGenerate,
+  isGenerating = false,
 }: AdditionalInfoStepProps) {
   return (
     <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur-md">
@@ -43,9 +45,10 @@ export default function AdditionalInfoStep({
         <button
           type="button"
           onClick={onGenerate}
+          disabled={isGenerating}
           className="rounded-lg border border-white/10 bg-white/10 px-5 py-2 text-sm font-medium text-white transition hover:bg-white/20"
         >
-          Generate CV
+          {isGenerating ? 'Generating...' : 'Generate CV'}
         </button>
       </div>
     </section>

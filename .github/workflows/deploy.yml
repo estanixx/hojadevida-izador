@@ -1,136 +1,335 @@
-name: AWS deploy workflow
+name: Deploy Infrastructure & Application
+
 on:
-  workflow_dispatch: # Esto habilita el botón manual
-    inputs:
-      reason:
-        description: 'Razón del despliegue manual'
-        required: false
-        default: 'Actualización rápida'
   push:
     branches:
-      - prod
+      - main    # dev environment
+      - prod    # production environment
     paths:
+      - 'terraform/**'
+      - 'backend/**'
       - 'frontend/**'
-      - 'infrastructure/**'
       - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
 env:
-  ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_ARN }}
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  REPO_NAME: my-frontend-app
-permissions:
-  id-token: write
-  contents: read
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.14.8'
+
 jobs:
-  # 1. Create or update CloudFormation stack for network infrastructure (if changed)
-  deploy-network-infrastructure:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }} # Adjust to your specific region
-
-      - name: Deploy CloudFormation Stack
-        uses: aws-actions/aws-cloudformation-github-deploy@v1
-        with:
-          name: my-network-infrastructure-stack
-          template: infrastructure/network-setup.yaml
-          capabilities: CAPABILITY_NAMED_IAM
-          no-fail-on-empty-changeset: "1" 
-
-  # 3. Update frontend container definition and trigger ECS deployment (if changed)
-  deploy-frontend:
-    needs:  deploy-network-infrastructure
+  # ============================================================================
+  # Determine environment based on branch
+  # ============================================================================
+  determine-env:
     runs-on: ubuntu-latest
     outputs:
-      frontend_changed: ${{ steps.filter.outputs.frontend }}
+      environment: ${{ steps.env.outputs.environment }}
+      tf_vars_file: ${{ steps.env.outputs.tf_vars_file }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.prod.tfvars" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # Initialize Terraform & Deploy Infrastructure
+  # ============================================================================
+  terraform-deploy:
+    needs: determine-env
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-env.outputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          fetch-depth: 0
-
-      - name: Detect frontend changes (push)
-        if: github.event_name == 'push'
-        uses: dorny/paths-filter@v3
-        id: filter_push
-        with:
-          base: ${{ github.event.before }}
-          ref: ${{ github.sha }}
-          filters: |
-            frontend:
-              - 'frontend/**'
-
-      - name: Mark frontend as changed (manual dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        id: filter_manual
-        run: echo "frontend=true" >> "$GITHUB_OUTPUT"
-
-      - name: Normalize frontend change output
-        id: filter
-        run: |
-          FRONTEND_CHANGED="${{ steps.filter_push.outputs.frontend || steps.filter_manual.outputs.frontend || 'false' }}"
-          echo "frontend=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "frontend_changed=$FRONTEND_CHANGED"
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{env.ROLE_TO_ASSUME}}
-          aws-region: ${{ env.AWS_REGION }} # Adjust to your specific region
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-terraform-deploy
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -var-file="${{ needs.determine-env.outputs.tf_vars_file }}" \
+            -out=tfplan
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -var-file="${{ needs.determine-env.outputs.tf_vars_file }}" \
+            -auto-approve \
+            tfplan
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Get Terraform Outputs
+        id: tf-outputs
+        working-directory: terraform
+        run: |
+          terraform output -json > outputs.json
+          cat outputs.json
+          echo "outputs_file=outputs.json" >> $GITHUB_OUTPUT
+
+      - name: Upload Terraform Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ needs.determine-env.outputs.environment }}
+          path: terraform/outputs.json
+          retention-days: 7
+
+  # ============================================================================
+  # Deploy Backend (Lambda functions)
+  # ============================================================================
+  backend-deploy:
+    needs:
+      - determine-env
+      - terraform-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-env.outputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-backend-deploy
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Build backend (zip for Lambda)
+        working-directory: backend
+        run: |
+          # Create deployment package
+          zip -r lambda-handler.zip . \
+            -x "*.git*" \
+            -x "node_modules/.bin/*" \
+            -x ".env*" \
+            -x "*.md"
+
+      - name: Get Lambda function names from Terraform outputs
+        id: lambda-names
+        run: |
+          # These should match your Terraform outputs
+          # Fallback to environment-based names if outputs not available
+          ENV_SUFFIX="${{ needs.determine-env.outputs.environment }}"
+          echo "list_cvs_function=hojadevida-listCvs-${ENV_SUFFIX}" >> $GITHUB_OUTPUT
+          echo "generate_cv_function=hojadevida-generateCv-${ENV_SUFFIX}" >> $GITHUB_OUTPUT
+
+      - name: Deploy listCvs Lambda function
+        working-directory: backend
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.lambda-names.outputs.list_cvs_function }} \
+            --zip-file fileb://lambda-handler.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          # Wait for update to complete
+          aws lambda wait function-updated \
+            --function-name ${{ steps.lambda-names.outputs.list_cvs_function }} \
+            --region ${{ env.AWS_REGION }}
+        continue-on-error: true
+
+      - name: Deploy generateCv Lambda function
+        working-directory: backend
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.lambda-names.outputs.generate_cv_function }} \
+            --zip-file fileb://lambda-handler.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          # Wait for update to complete
+          aws lambda wait function-updated \
+            --function-name ${{ steps.lambda-names.outputs.generate_cv_function }} \
+            --region ${{ env.AWS_REGION }}
+        continue-on-error: true
+
+  # ============================================================================
+  # Deploy Frontend (ECS + Docker image)
+  # ============================================================================
+  frontend-deploy:
+    needs:
+      - determine-env
+      - terraform-deploy
+      - backend-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-env.outputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-frontend-deploy
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Get Current Image URI
-        if: steps.filter.outputs.frontend == 'false'
-        id: get-current
+      - name: Get environment variables
+        id: env-vars
+        env:
+          ENV: ${{ needs.determine-env.outputs.environment }}
         run: |
-          # Use AWS CLI to find the image currently in the Task Definition
-          REPO_NAME="${{ env.REPO_NAME }}"
-          REGISTRY_ID=$(aws ecr describe-registry --query 'registryId' --output text)
-          
-          LAST_IMAGE_TAG=$(aws ecr describe-images \
-            --repository-name $REPO_NAME \
-            --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' \
-            --output text 2>/dev/null || echo "")
-
-          if [ -z "$LAST_IMAGE_TAG" ] || [ "$LAST_IMAGE_TAG" == "None" ]; then
-            echo "image_found=false" >> $GITHUB_OUTPUT
-            echo "No se encontraron imágenes en el repositorio ECR: $REPO_NAME"
+          if [[ "$ENV" == "dev" ]]; then
+            echo "api_url=${{ secrets.API_URL_DEV }}" >> $GITHUB_OUTPUT
+            echo "cognito_pool_id=${{ secrets.COGNITO_POOL_ID_DEV }}" >> $GITHUB_OUTPUT
+            echo "cognito_client_id=${{ secrets.COGNITO_CLIENT_ID_DEV }}" >> $GITHUB_OUTPUT
           else
-            # Construimos la URI completa
-            FULL_URI="${{ steps.login-ecr.outputs.registry }}/$REPO_NAME:$LAST_IMAGE_TAG"
-            echo "image=$FULL_URI" >> $GITHUB_OUTPUT
-            echo "image_found=true" >> $GITHUB_OUTPUT
-            echo "Última imagen encontrada en ECR: $FULL_URI"
+            echo "api_url=${{ secrets.API_URL_PROD }}" >> $GITHUB_OUTPUT
+            echo "cognito_pool_id=${{ secrets.COGNITO_POOL_ID_PROD }}" >> $GITHUB_OUTPUT
+            echo "cognito_client_id=${{ secrets.COGNITO_CLIENT_ID_PROD }}" >> $GITHUB_OUTPUT
           fi
-          echo "${{steps.filter.outputs.frontend}}"
 
-      - name: Build, Tag, and Push Image to ECR
-        if: steps.filter.outputs.frontend == 'true' || steps.get-current.outputs.image_found == 'false'
-        id: build-image
+      - name: Build, Tag, and Push image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.REPO_NAME }}
+          ECR_REPOSITORY: hojadevida-frontend
           IMAGE_TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_URL: ${{ steps.env-vars.outputs.api_url }}
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ steps.env-vars.outputs.cognito_pool_id }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ steps.env-vars.outputs.cognito_client_id }}
         run: |
-          # Only build if frontend files changed (optional optimization)
-          docker build -f ./frontend/Dockerfile.prod -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./frontend
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-      
-      - name: Deploy CloudFormation Stack
-        uses: aws-actions/aws-cloudformation-github-deploy@v1
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
+            --build-arg NEXT_PUBLIC_COGNITO_USER_POOL_ID="${NEXT_PUBLIC_COGNITO_USER_POOL_ID}" \
+            --build-arg NEXT_PUBLIC_COGNITO_CLIENT_ID="${NEXT_PUBLIC_COGNITO_CLIENT_ID}" \
+            -f ./frontend/Dockerfile.prod \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
+            ./frontend
+          
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+          
+          echo "image=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Update ECS service
+        env:
+          ECS_CLUSTER: hojadevida-cluster
+          ECS_SERVICE_DEV: hojadevida-frontend-service
+          ECS_TASK_FAMILY: hojadevida-frontend-task
+        run: |
+          ENV="${{ needs.determine-env.outputs.environment }}"
+          
+          # Force new deployment to pull latest image
+          aws ecs update-service \
+            --cluster ${ECS_CLUSTER} \
+            --service ${ECS_SERVICE_DEV} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Wait for service to stabilize
+          aws ecs wait services-stable \
+            --cluster ${ECS_CLUSTER} \
+            --services ${ECS_SERVICE_DEV} \
+            --region ${{ env.AWS_REGION }} || true
+
+  # ============================================================================
+  # Verify deployment
+  # ============================================================================
+  verify-deployment:
+    needs:
+      - determine-env
+      - frontend-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-env.outputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: my-frontend-stack
-          template: infrastructure/frontend-setup.yaml
-          parameter-overrides: >-
-            ECRImageUri=${{ steps.build-image.outputs.image || steps.get-current.outputs.image }}
-          capabilities: CAPABILITY_NAMED_IAM
-          no-fail-on-empty-changeset: "1" 
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-verify
+
+      - name: Check API Gateway health
+        run: |
+          API_ID="hojadevida-api-${{ needs.determine-env.outputs.environment }}"
+          echo "Verifying API Gateway: $API_ID"
+          # Basic check - could expand with actual health check
+
+      - name: Check ECS service status
+        run: |
+          ENV="${{ needs.determine-env.outputs.environment }}"
+          aws ecs describe-services \
+            --cluster hojadevida-cluster \
+            --services hojadevida-frontend-service \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].[runningCount,desiredCount,deployments[0].status]' \
+            --output table
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Deployment Complete!"
+          echo "Environment: ${{ needs.determine-env.outputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"

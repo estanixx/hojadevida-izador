@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Network setup for the application
+
 Parameters:
   AZ1:
     Type: AWS::EC2::AvailabilityZone::Name
@@ -12,15 +13,22 @@ Parameters:
   Production:
     Type: String
     Description: Whether to use a NAT Gateway for private subnets
-    AllowedValues: [true, false]
+    AllowedValues:
+      - true
+      - false
     Default: false
 
 Conditions:
-  IsProduction: !Equals [!Ref Production, "true"]
-  NotProduction: !Not [!Equals [!Ref Production, "true"]]
+  IsProduction: !Equals
+    - !Ref Production
+    - 'true'
+  NotProduction: !Not
+    - !Equals
+      - !Ref Production
+      - 'true'
 Resources:
   # 1. Main Structure: VPC, Subnets
-  VPC: 
+  VPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.16.0.0/16
@@ -36,18 +44,24 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.16.0.0/20
       AvailabilityZone: !Ref AZ1
-      MapPublicIpOnLaunch: !If [IsProduction, false, true]
+      MapPublicIpOnLaunch: !If
+        - IsProduction
+        - false
+        - true
       Tags:
         - Key: Name
           Value: hojadevida-subnet-1
-        
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.16.16.0/20
       AvailabilityZone: !Ref AZ2
-      MapPublicIpOnLaunch: !If [IsProduction, false, true]
+      MapPublicIpOnLaunch: !If
+        - IsProduction
+        - false
+        - true
       Tags:
         - Key: Name
           Value: hojadevida-subnet-2
@@ -82,7 +96,7 @@ Resources:
       Tags:
         - Key: Name
           Value: hojadevida-igw
-  
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -99,7 +113,7 @@ Resources:
       Tags:
         - Key: Name
           Value: hojadevida-eip-1
-  
+
   EIP2:
     Type: AWS::EC2::EIP
     Condition: IsProduction
@@ -153,7 +167,7 @@ Resources:
       Tags:
         - Key: Name
           Value: hojadevida-private-rt-2
-  
+
   # 5. Routes
   PublicRoute:
     Type: AWS::EC2::Route
@@ -162,7 +176,7 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-  
+
   PrivateRoute1:
     Type: AWS::EC2::Route
     Condition: IsProduction
@@ -170,7 +184,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway1
-  
+
   PrivateRoute2:
     Type: AWS::EC2::Route
     Condition: IsProduction
@@ -178,7 +192,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway2
-  
+
   PrivateRouteNoNat1:
     Type: AWS::EC2::Route
     Condition: NotProduction
@@ -194,20 +208,20 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-      
+
   # 6. Subnet Associations
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
-  
+
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
-  
+
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -219,29 +233,30 @@ Resources:
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
+      
 Outputs:
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
-    Export: 
-      Name: "Hojadevida-VPC"
+    Export:
+      Name: Hojadevida-VPC
   PublicSubnet1:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
-    Export: 
-      Name: "Hojadevida-PublicSubnet1"
+    Export:
+      Name: Hojadevida-PublicSubnet1
   PublicSubnet2:
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
-    Export: 
-      Name: "Hojadevida-PublicSubnet2"
+    Export:
+      Name: Hojadevida-PublicSubnet2
   PrivateSubnet1:
     Description: Private Subnet 1 ID
     Value: !Ref PrivateSubnet1
-    Export: 
-      Name: "Hojadevida-PrivateSubnet1"
+    Export:
+      Name: Hojadevida-PrivateSubnet1
   PrivateSubnet2:
     Description: Private Subnet 2 ID
     Value: !Ref PrivateSubnet2
-    Export: 
-      Name: "Hojadevida-PrivateSubnet2"
+    Export:
+      Name: Hojadevida-PrivateSubnet2

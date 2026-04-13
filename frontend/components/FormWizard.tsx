@@ -1,15 +1,16 @@
 'use client';
 
+import { getIdToken } from '@/lib/auth';
 import type { CVData, ExperienceItem, LanguageItem } from '@/lib/types';
 import gsap from 'gsap';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import ProgressBar from './ProgressBar';
 import AdditionalInfoStep from './steps/AdditionalInfoStep';
 import ExperienceStep from './steps/ExperienceStep';
 import LanguagesStep from './steps/LanguagesStep';
 import PersonalInfoStep from './steps/PersonalInfoStep';
 import SkillsStep from './steps/SkillsStep';
-import { v4 as uuidv4 } from 'uuid';
 const createEmptyExperience = (): ExperienceItem => ({
   id: uuidv4(),
   enterpriseName: '',
@@ -36,6 +37,10 @@ const initialData: CVData = {
   experiences: [createEmptyExperience()],
   skills: [],
   languages: [createEmptyLanguage()],
+  social: {
+    github: '',
+    linkedin: '',
+  },
   additionalInformation: '',
   summary: '',
   education: [],
@@ -53,6 +58,8 @@ export default function FormWizard() {
     false,
   ]);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSkillsInputFocused, setIsSkillsInputFocused] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const stepRef = useRef<HTMLDivElement>(null);
@@ -122,14 +129,39 @@ export default function FormWizard() {
     });
   };
 
-  const handleNext = () => {
-    if (isAnimating) {
+  const submitCv = async () => {
+    if (isSubmitting) {
       return;
     }
 
-    markCurrentStepCompleted();
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    if (currentStep === steps.length - 1) {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) {
+        throw new Error('NEXT_PUBLIC_API_URL is not configured.');
+      }
+
+      const token = await getIdToken();
+
+      if (!token) {
+        throw new Error('Login required to generate CV.');
+      }
+
+      const createResponse = await fetch(`${apiUrl}/cvs/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(cvData),
+      });
+
+      if (!createResponse.ok) {
+        throw new Error(`Generation failed with status ${createResponse.status}`);
+      }
+
       setSubmitted(true);
       if (successPulseRef.current) {
         gsap.fromTo(
@@ -144,7 +176,22 @@ export default function FormWizard() {
           }
         );
       }
-      console.log('CV JSON:\n', JSON.stringify(cvData, null, 2));
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not generate CV.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (isAnimating) {
+      return;
+    }
+
+    markCurrentStepCompleted();
+
+    if (currentStep === steps.length - 1) {
+      submitCv();
       return;
     }
 
@@ -204,6 +251,18 @@ export default function FormWizard() {
                 },
               }));
             }}
+            social={cvData.social}
+            onChangeSocial={(field, value) => {
+              setCvData((previous) => ({
+                ...previous,
+                social: {
+                  ...previous.social,
+                  [field]: value,
+                },
+              }));
+            }}
+            onBack={handleBack}
+            canGoBack={currentStep > 0}
             onNext={handleNext}
           />
         )}
@@ -304,6 +363,7 @@ export default function FormWizard() {
               }}
               onBack={handleBack}
               onGenerate={handleNext}
+              isGenerating={isSubmitting}
             />
           </div>
         )}
@@ -311,9 +371,11 @@ export default function FormWizard() {
 
       {submitted && (
         <p className="mt-5 text-center text-sm text-emerald-300">
-          All set. Your CV data was logged successfully.
+          All set. Your CV was generated and saved.
         </p>
       )}
+
+      {submitError && <p className="mt-4 text-center text-sm text-rose-300">{submitError}</p>}
     </div>
   );
 }

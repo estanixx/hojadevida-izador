@@ -1,0 +1,186 @@
+name: Terraform Plan on Pull Requests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - prod
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/plan.yml'
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.14.8'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ============================================================================
+  # Determine which environment the PR targets
+  # ============================================================================
+  determine-env:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      tf_vars_file: ${{ steps.env.outputs.tf_vars_file }}
+    steps:
+      - name: Determine environment from target branch
+        id: env
+        run: |
+          if [[ "${{ github.base_ref }}" == "main" ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.base_ref }}" == "prod" ]]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.prod.tfvars" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "tf_vars_file=terraform/terraform.tfvars" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # Terraform Plan (comment on PR)
+  # ============================================================================
+  terraform-plan:
+    needs: determine-env
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-terraform-plan
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -var-file="${{ needs.determine-env.outputs.tf_vars_file }}" \
+            -out=tfplan \
+            -json > plan.json 2>&1 || true
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        continue-on-error: true
+
+      - name: Generate Plan Summary
+        id: summary
+        working-directory: terraform
+        run: |
+          # Extract plan summary from terraform output
+          if [ -f tfplan ]; then
+            PLAN_OUTPUT=$(terraform show -no-color tfplan 2>&1)
+            # Count resources
+            ADDS=$(echo "$PLAN_OUTPUT" | grep -c "^  # " || echo "0")
+            echo "plan_exists=true" >> $GITHUB_OUTPUT
+            echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+            echo "$PLAN_OUTPUT" | head -100 >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "plan_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment Plan on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const plan_file = 'terraform/tfplan';
+            const environment = '${{ needs.determine-env.outputs.environment }}';
+            
+            let comment_body = `## 📋 Terraform Plan - ${environment.toUpperCase()} Environment\n\n`;
+            
+            // Check if plan file exists
+            if (fs.existsSync(plan_file)) {
+              comment_body += `✅ **Plan generated successfully**\n\n`;
+              comment_body += `**Target Environment**: ${environment}\n`;
+              comment_body += `**Target Branch**: \`${{ github.base_ref }}\`\n`;
+              comment_body += `**Commit**: ${{ github.event.pull_request.head.sha }}\n\n`;
+              comment_body += `### Next Steps\n`;
+              comment_body += `1. Review the changes above\n`;
+              comment_body += `2. Request approval from maintainers\n`;
+              comment_body += `3. Merge to deploy\n\n`;
+              
+              if ('${{ needs.determine-env.outputs.environment }}' === 'prod') {
+                comment_body += `⚠️ **IMPORTANT**: Direct pushes to \`prod\` branch are **disabled**. Changes must be merged via pull request.\n`;
+              }
+            } else {
+              comment_body += `❌ **No changes detected** or plan failed\n`;
+              comment_body += `Environment: ${environment}\n`;
+            }
+            
+            comment_body += `\n---\n`;
+            comment_body += `*Generated by GitHub Actions at ${new Date().toISOString()}*`;
+            
+            // Post comment
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment_body
+            });
+
+  # ============================================================================
+  # Check branch protection (for prod)
+  # ============================================================================
+  check-prod-protection:
+    if: github.base_ref == 'prod'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR is from dev to prod
+        run: |
+          if [[ "${{ github.head_ref }}" != "main" ]]; then
+            echo "❌ Direct pushes to prod are forbidden!"
+            echo "Only pull requests from 'main' (dev) to 'prod' are allowed."
+            exit 1
+          fi
+          echo "✅ PR from main to prod - allowed"
+
+  # ============================================================================
+  # Optional: Run Terraform security checks (tfsec, checkov, etc.)
+  # ============================================================================
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1
+        with:
+          working_directory: 'terraform'
+          format: 'sarif'
+          out: 'tfsec.sarif'
+        continue-on-error: true
+
+      - name: Upload security results to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'tfsec.sarif'
+        continue-on-error: true

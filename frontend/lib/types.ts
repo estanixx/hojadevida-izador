@@ -21,11 +21,17 @@ export interface LanguageItem {
   proficiencyLevel: string;
 }
 
+export interface SocialLinks {
+  github: string;
+  linkedin: string;
+}
+
 export interface CVData {
   personalInfo: PersonalInfo;
   experiences: ExperienceItem[];
   skills: string[];
   languages: LanguageItem[];
+  social: SocialLinks;
   additionalInformation: string;
   summary: string;
   education: {

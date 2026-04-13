@@ -1,0 +1,138 @@
+org: estanix
+app: hojadevida-izador
+service: hojadevida-izador-backend
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  environment:
+    # Resource names as environment variables for easy access in Lambda functions
+    CVS_TABLE: !Ref CvsDynamoDbTable
+    CVS_BUCKET: !Ref CvsS3Bucket
+
+  # 1. Global permissions for Lambda functions to access DynamoDB, S3, and Bedrock
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:Query
+            - dynamodb:GetItem
+          Resource: !GetAtt CvsDynamoDbTable.Arn
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource: !Join ['', [!GetAtt CvsS3Bucket.Arn, '/*']]
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+          Resource: '*' # O restringe al ARN del modelo específico de Claude/Titan que uses
+
+  # 2. Configure Authorizer
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+    authorizers:
+      cognitoAuth:
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl:
+          !Join [
+            '',
+            ['https://cognito-idp.', '${aws:region}', '.amazonaws.com/', !Ref CognitoUserPool],
+          ]
+        audience:
+          - !Ref CognitoUserPoolClient
+
+functions:
+  listCvs:
+    handler: handler.listCvs
+    events:
+      - httpApi:
+          path: /cvs
+          method: get
+          authorizer:
+            name: cognitoAuth
+  generateCv:
+    handler: handler.generateCv
+    events:
+      - httpApi:
+          path: /cvs/generate
+          method: post
+          # 3. Protect route with cognito authorizer
+          authorizer:
+            name: cognitoAuth
+
+resources:
+  Resources:
+    # 4. S3 Bucket for PDFs
+    CvsS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: hojadevida-izador-cvs-${sls:stage}
+
+    # 5. DynamoDB Table (Partition Key: userId, Sort Key: cvId)
+    CvsDynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: hojadevida-izador-table-${sls:stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: cvId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: cvId
+            KeyType: RANGE
+
+    # 6. Cognito User Pool
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: hojadevida-izador-users-${sls:stage}
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+
+    # 7. Cognito Client
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: hojadevida-izador-web-client
+        UserPoolId: !Ref CognitoUserPool
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        PreventUserExistenceErrors: ENABLED
+
+  Outputs:
+    HttpApiUrl:
+      Description: 'HTTP API URL'
+      Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+      Export:
+        Name: !Sub 'Hojadevida-HttpApiUrl'
+    UserPoolId:
+      Description: 'Cognito User Pool ID'
+      Value: !Ref CognitoUserPool
+      Export:
+        Name: !Sub 'Hojadevida-UserPoolId'
+    UserPoolClientId:
+      Description: 'Cognito User Pool Client ID'
+      Value: !Ref CognitoUserPoolClient
+      Export:
+        Name: !Sub 'Hojadevida-UserPoolClientId'

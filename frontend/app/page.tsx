@@ -1,20 +1,9 @@
 'use client';
 
+import Navbar from '@/components/Navbar';
 import gsap from 'gsap';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-
-function Login() {
-  return (
-    <button
-      type="button"
-      disabled
-      className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/85 backdrop-blur-md"
-    >
-      Login
-    </button>
-  );
-}
 
 export default function Home() {
   const router = useRouter();
@@ -53,12 +42,7 @@ export default function Home() {
 
   return (
     <div ref={wrapperRef} className="relative flex min-h-screen flex-col px-8 py-6">
-      <header className="flex items-center justify-between">
-        <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-indigo-100 backdrop-blur-md">
-          hello@hojadevida-izador.com
-        </p>
-        <Login />
-      </header>
+      <Navbar />
 
       <section className="relative flex flex-1 flex-col items-center justify-center text-center">
         <div
