@@ -93,13 +93,7 @@ Resources:
     Properties:
       Name: !Sub 'hojadevida-api-${Environment}'
       StageName: !Ref Environment
-      Auth:
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn: !GetAtt CognitoUserPool.Arn
-            Identity:
-              ReusableArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/authorizers/${CognitoAuthorizer}'
-      CorsPolicy:
+      CorsConfiguration:
         AllowMethods:
           - GET
           - POST
@@ -109,6 +103,12 @@ Resources:
           - Authorization
         AllowOrigins:
           - '*'
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+            Identity:
+              ReusableArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/authorizers/${CognitoAuthorizer}'
 
   # Cognito Authorizer for HTTP API
   CognitoAuthorizer:
