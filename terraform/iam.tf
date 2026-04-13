@@ -47,7 +47,7 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 
   tags = {
     Name        = "${var.app_name}-ecs-task-execution-role"
-    Description = "Execution role for ECS tasks (ECR, CloudWatch access)"
+    Description = "Execution role for ECS tasks - ECR and CloudWatch access"
   }
 }
 
@@ -98,10 +98,16 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # NOTE: ECS frontend task permissions added here as needed
-      # Currently, frontend serves static content from ECS container
-      # If frontend needs to access backend resources (S3, DynamoDB), add permissions here
-      # Backend resources are managed by SAM, keep least-privilege access
+      {
+        Sid    = "AllowECSContainerBasics"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+      }
     ]
   })
 }
