@@ -61,23 +61,13 @@ resource "aws_ecs_task_definition" "frontend" {
         {
           name  = "NODE_ENV"
           value = var.environment == "prod" ? "production" : "development"
-        },
-        {
-          name  = "NEXT_PUBLIC_API_URL"
-          value = aws_apigatewayv2_api.http_api.api_endpoint
-        },
-        {
-          name  = "NEXT_PUBLIC_COGNITO_USER_POOL_ID"
-          value = aws_cognito_user_pool.main.id
-        },
-        {
-          name  = "NEXT_PUBLIC_COGNITO_CLIENT_ID"
-          value = aws_cognito_user_pool_client.web.id
-        },
-        {
-          name  = "NEXT_PUBLIC_COGNITO_REGION"
-          value = data.aws_region.current.name
         }
+        # Backend configuration (API URL, Cognito) comes from GitHub secrets/SAM stack outputs
+        # Frontend will read these from .env.local or GitHub Actions secrets:
+        # - NEXT_PUBLIC_API_URL (from SAM stack output)
+        # - NEXT_PUBLIC_COGNITO_USER_POOL_ID (from SAM stack output)
+        # - NEXT_PUBLIC_COGNITO_CLIENT_ID (from SAM stack output)
+        # - NEXT_PUBLIC_COGNITO_REGION (from data.aws_region)
       ]
 
       logConfiguration = {
