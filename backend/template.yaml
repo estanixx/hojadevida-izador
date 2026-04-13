@@ -89,28 +89,29 @@ Resources:
   # ============================================================================
 
   HttpApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      Name: !Sub 'hojadevida-api-${Environment}'
-      StageName: !Ref Environment
-      CorsConfiguration:
-        AllowMethods:
-          - GET
-          - POST
-          - OPTIONS
-        AllowHeaders:
-          - Content-Type
-          - Authorization
-        AllowOrigins:
-          - '*'
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            JwtConfiguration:
-              audience:
-                - !Ref CognitoUserPoolClient
-              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+     Type: AWS::Serverless::HttpApi
+     Properties:
+       Name: !Sub 'hojadevida-api-${Environment}'
+       StageName: !Ref Environment
+       CorsConfiguration:
+         AllowMethods:
+           - GET
+           - POST
+           - OPTIONS
+         AllowHeaders:
+           - Content-Type
+           - Authorization
+         AllowOrigins:
+           - '*'
+       Auth:
+         DefaultAuthorizer: CognitoAuthorizer
+         Authorizers:
+           CognitoAuthorizer:
+             IdentitySource: $request.header.Authorization
+             JwtConfiguration:
+               audience:
+                 - !Ref CognitoUserPoolClient
+               issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
 
   # Cognito Authorizer for HTTP API (JWT-based)
   CognitoAuthorizer:
