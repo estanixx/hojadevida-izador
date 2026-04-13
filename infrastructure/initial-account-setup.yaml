@@ -5,7 +5,7 @@ Description: >
   - ECR Repository for frontend Docker images
   - Terraform state S3 buckets (dev & prod)
   - Terraform state DynamoDB lock tables (dev & prod)
-  - API Gateway endpoints (dev & prod)
+  - SAM artifact S3 buckets (dev & prod)
 
 Parameters:
   GitHubOrg:
@@ -46,7 +46,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Ref GitHubOIDCProvider
+              Federated: !GetAtt GitHubOIDCProvider.Arn
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
@@ -56,23 +56,23 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
 
-   # ============================================================================
-   # 2. ECR Repository for Frontend
-   # ============================================================================
+  # ============================================================================
+  # 2. ECR Repository for Frontend
+  # ============================================================================
 
-   ECRRepository:
-     Type: AWS::ECR::Repository
-     Properties:
-       RepositoryName: !Ref ECRRepositoryName
-       ImageScanningConfiguration:
-         ScanOnPush: true
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ECRRepositoryName
+      ImageScanningConfiguration:
+        ScanOnPush: true
 
-   # ============================================================================
-   # 3. Terraform State Infrastructure (Dev & Prod)
-   # ============================================================================
+  # ============================================================================
+  # 3. Terraform State Infrastructure (Dev & Prod)
+  # ============================================================================
 
-   # Dev Environment State Bucket
-   TerraformStateDevBucket:
+  # Dev Environment State Bucket
+  TerraformStateDevBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'hojadevida-terraform-state-${AccountId}-dev'
@@ -131,57 +131,50 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
-   # ============================================================================
-   # 4. SAM Artifact Bucket (Dev & Prod)
-   # ============================================================================
-   # S3 bucket for SAM to store Lambda deployment artifacts during sam deploy
-   # Referenced in sam deploy command via --s3-bucket parameter
+  # ============================================================================
+  # 4. SAM Artifact Buckets (Dev & Prod)
+  # ============================================================================
+  # S3 buckets for SAM to store Lambda deployment artifacts during sam deploy
+  # Referenced in sam deploy command via --s3-bucket parameter
 
   SAMArtifactDevBucket:
-     Type: AWS::S3::Bucket
-     Properties:
-       BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-dev'
-       VersioningConfiguration:
-         Status: Enabled
-       PublicAccessBlockConfiguration:
-         BlockPublicAcls: true
-         BlockPublicPolicy: true
-         IgnorePublicAcls: true
-         RestrictPublicBuckets: true
-       Tags:
-         - Key: Purpose
-           Value: SAM-Artifacts
-         - Key: Environment
-           Value: dev
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-dev'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Purpose
+          Value: SAM-Artifacts
+        - Key: Environment
+          Value: dev
 
   SAMArtifactProdBucket:
-     Type: AWS::S3::Bucket
-     Properties:
-       BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-prod'
-       VersioningConfiguration:
-         Status: Enabled
-       PublicAccessBlockConfiguration:
-         BlockPublicAcls: true
-         BlockPublicPolicy: true
-         IgnorePublicAcls: true
-         RestrictPublicBuckets: true
-       Tags:
-         - Key: Purpose
-           Value: SAM-Artifacts
-         - Key: Environment
-           Value: prod
-
-   # ============================================================================
-   # 5. API Gateway Endpoints (Dev & Prod)
-   # ============================================================================
-   # NOTE: API Gateways are now managed by AWS SAM (backend/template.yaml)
-   # SAM creates API Gateways with Lambda integrations for backend services.
-   # This allows SAM to own the complete backend stack (Lambda + API + integrations).
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'hojadevida-sam-artifacts-${AccountId}-prod'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Purpose
+          Value: SAM-Artifacts
+        - Key: Environment
+          Value: prod
 
 Outputs:
   OIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider
-    Value: !Ref GitHubOIDCProvider
+    Value: !GetAtt GitHubOIDCProvider.Arn
     Export:
       Name: Hojadevida-GitHubOIDCProviderArn
 
@@ -191,11 +184,11 @@ Outputs:
     Export:
       Name: Hojadevida-GitHubOIDCRoleArn
 
-   ECRRepositoryUri:
-     Description: URI of the ECR repository
-     Value: !GetAtt ECRRepository.RepositoryUri
-     Export:
-       Name: Hojadevida-ECRRepositoryUri
+  ECRRepositoryUri:
+    Description: URI of the ECR repository
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: Hojadevida-ECRRepositoryUri
 
   # Terraform State Outputs
   TerraformStateDevBucketName:
@@ -217,25 +210,20 @@ Outputs:
       Name: Hojadevida-TerraformLocksDevTable
 
   TerraformLocksProdTableName:
-     Description: Name of the prod Terraform locks table
-     Value: !Ref TerraformLocksProdTable
-     Export:
-       Name: Hojadevida-TerraformLocksProdTable
+    Description: Name of the prod Terraform locks table
+    Value: !Ref TerraformLocksProdTable
+    Export:
+      Name: Hojadevida-TerraformLocksProdTable
 
   # SAM Artifact Bucket Outputs
   SAMArtifactDevBucketName:
-     Description: Name of the dev SAM artifact bucket
-     Value: !Ref SAMArtifactDevBucket
-     Export:
-       Name: Hojadevida-SAMArtifactDevBucket
+    Description: Name of the dev SAM artifact bucket
+    Value: !Ref SAMArtifactDevBucket
+    Export:
+      Name: Hojadevida-SAMArtifactDevBucket
 
   SAMArtifactProdBucketName:
-     Description: Name of the prod SAM artifact bucket
-     Value: !Ref SAMArtifactProdBucket
-     Export:
-       Name: Hojadevida-SAMArtifactProdBucket
-
-   # API Gateway Outputs
-   # NOTE: API Gateway endpoints are now provided by AWS SAM (backend/template.yaml)
-   # After SAM deployment, retrieve the API endpoint from SAM stack outputs:
-   #   aws cloudformation describe-stacks --stack-name hojadevida-backend-{env} --query 'Stacks[0].Outputs' --region us-east-1
+    Description: Name of the prod SAM artifact bucket
+    Value: !Ref SAMArtifactProdBucket
+    Export:
+      Name: Hojadevida-SAMArtifactProdBucket
