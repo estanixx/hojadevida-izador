@@ -101,7 +101,7 @@ resource "aws_cognito_user_pool_client" "web" {
   # Timeout settings (in seconds)
   access_token_validity  = 60
   id_token_validity      = 60
-  refresh_token_validity = 30 * 24 * 60 # 30 days
+  refresh_token_validity = 30
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
@@ -173,7 +173,7 @@ resource "aws_ssm_parameter" "cognito_config" {
 
   value = jsonencode({
     user_pool_id           = aws_cognito_user_pool.main.id
-    client_id              = aws_cognito_user_pool_client.web.client_id
+    client_id              = aws_cognito_user_pool_client.web.id
     region                 = data.aws_region.current.name
     domain                 = aws_cognito_user_pool_domain.main.domain
     authorization_endpoint = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${data.aws_region.current.name}.amazoncognito.com/oauth2/authorize"

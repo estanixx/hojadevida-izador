@@ -68,26 +68,6 @@ resource "aws_dynamodb_table" "cvs" {
   }
 
   # ========================================================================
-  # Point-in-Time Recovery (PITR)
-  # ========================================================================
-  # Disabled per user requirement - CVs are not archival data
-  # Can be enabled in production if backup strategy changes
-
-  point_in_time_recovery_specification {
-    point_in_time_recovery_enabled = false
-  }
-
-  # ========================================================================
-  # Server-Side Encryption
-  # ========================================================================
-  # Uses AWS managed keys by default
-  # Can be upgraded to customer-managed keys in KMS for prod if needed
-
-  server_side_encryption_specification {
-    enabled = true
-  }
-
-  # ========================================================================
   # Tags
   # ========================================================================
   # Applied automatically via provider default_tags
@@ -124,15 +104,6 @@ resource "aws_dynamodb_table" "terraform_locks" {
   attribute {
     name = "LockID"
     type = "S"
-  }
-
-  # ========================================================================
-  # Server-Side Encryption
-  # ========================================================================
-  # Enabled for securing lock state data
-
-  server_side_encryption_specification {
-    enabled = true
   }
 
   # ========================================================================

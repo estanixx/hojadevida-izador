@@ -26,16 +26,6 @@ resource "aws_cloudwatch_log_group" "ecs" {
   }
 }
 
-# API Gateway log group (HTTP API v2)
-resource "aws_cloudwatch_log_group" "api_gateway" {
-  name              = "/aws/apigateway/${var.app_name}-${var.environment}"
-  retention_in_days = var.cloudwatch_log_retention_days
-
-  tags = {
-    Name = "${var.app_name}-apigw-logs"
-  }
-}
-
 # ============================================================================
 # CloudWatch Alarms
 # ============================================================================

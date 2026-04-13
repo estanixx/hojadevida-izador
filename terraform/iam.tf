@@ -120,7 +120,7 @@ resource "aws_iam_role_policy" "lambda_execution_policy" {
         Action = [
           "ssm:GetParameter"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/${var.app_name}/*"
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.app_name}/*"
       }
     ]
   })
@@ -223,7 +223,7 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1", "1b511abead59c6ce207077c0ef0285a5000e659e6a6ab5b150b532a26f6692c7"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 
   tags = {
     Name        = "${var.app_name}-github-oidc-provider"
@@ -347,7 +347,7 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
           "lambda:GetFunction",
           "lambda:InvokeFunction"
         ]
-        Resource = "arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:${var.app_name}*"
+        Resource = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${var.app_name}*"
       },
       # ======================================================================
       # ECR (Container Image Management)
@@ -374,7 +374,7 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload"
         ]
-        Resource = "arn:aws:ecr:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:repository/${var.app_name}*"
+        Resource = "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.app_name}*"
       },
       # ======================================================================
       # ECS Service Deployment
@@ -390,8 +390,8 @@ resource "aws_iam_role_policy" "github_oidc_role_policy" {
           "ecs:RegisterTaskDefinition"
         ]
         Resource = [
-          "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.app_name}*/*",
-          "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.app_name}*:*"
+          "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.app_name}*/*",
+          "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/${var.app_name}*:*"
         ]
       },
       # Allow passing IAM role to ECS tasks

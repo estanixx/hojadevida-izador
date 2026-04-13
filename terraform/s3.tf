@@ -130,6 +130,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cvs" {
   rule {
     id     = "ExpireNoncurrentVersions"
     status = "Enabled"
+    filter {}
 
     noncurrent_version_expiration {
       noncurrent_days = var.s3_lifecycle_retention_days
@@ -139,6 +140,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cvs" {
   rule {
     id     = "TransitionToGlacier"
     status = "Enabled"
+    filter {}
 
     transition {
       days          = var.s3_glacier_transition_days
@@ -224,6 +226,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
   rule {
     id     = "RetainStateVersions"
     status = "Enabled"
+    filter {}
 
     noncurrent_version_expiration {
       noncurrent_days = 30

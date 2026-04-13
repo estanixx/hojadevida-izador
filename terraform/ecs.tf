@@ -14,14 +14,6 @@ resource "aws_ecs_cluster" "main" {
     Name = "${var.app_name}-cluster"
   }
 }
-}
-
-# Enable container insights for CloudWatch monitoring
-resource "aws_ecs_cluster_setting" "insights" {
-  name    = "containerInsights"
-  value   = "enabled"
-  cluster = aws_ecs_cluster.main.name
-}
 
 # ECS Capacity Providers (Fargate and Fargate Spot for cost optimization)
 resource "aws_ecs_cluster_capacity_providers" "main" {
@@ -80,7 +72,7 @@ resource "aws_ecs_task_definition" "frontend" {
         },
         {
           name  = "NEXT_PUBLIC_COGNITO_CLIENT_ID"
-          value = aws_cognito_user_pool_client.web.client_id
+          value = aws_cognito_user_pool_client.web.id
         },
         {
           name  = "NEXT_PUBLIC_COGNITO_REGION"

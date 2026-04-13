@@ -25,7 +25,7 @@ output "cognito_user_pool_name" {
 
 output "cognito_user_pool_client_id" {
   description = "The Cognito User Pool Client ID (for frontend)"
-  value       = aws_cognito_user_pool_client.web.client_id
+  value       = aws_cognito_user_pool_client.web.id
 }
 
 output "cognito_user_pool_endpoint" {
@@ -177,7 +177,7 @@ output "frontend_env_vars" {
   value = jsonencode({
     NEXT_PUBLIC_API_URL              = aws_apigatewayv2_api.http_api.api_endpoint
     NEXT_PUBLIC_COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
-    NEXT_PUBLIC_COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.web.client_id
+    NEXT_PUBLIC_COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.web.id
     NEXT_PUBLIC_COGNITO_REGION       = data.aws_region.current.name
   })
 }
@@ -196,7 +196,7 @@ output "ssm_lambda_config_path" {
 # GitHub OIDC Outputs
 output "github_oidc_role_arn" {
   description = "ARN of GitHub OIDC role for CI/CD"
-  value       = aws_iam_role.github_oidc.arn
+  value       = aws_iam_role.github_oidc_role.arn
 }
 
 # Account and Region Info
@@ -224,7 +224,7 @@ output "deployment_summary" {
     Frontend URL:       http://${aws_lb.main.dns_name}
     
     Cognito User Pool:  ${aws_cognito_user_pool.main.id}
-    Cognito Client:     ${aws_cognito_user_pool_client.web.client_id}
+    Cognito Client:     ${aws_cognito_user_pool_client.web.id}
     
     Lambda Functions:   ${aws_lambda_function.list_cvs.function_name}, ${aws_lambda_function.generate_cv.function_name}
     DynamoDB Table:     ${aws_dynamodb_table.cvs.name}
