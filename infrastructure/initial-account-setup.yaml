@@ -134,36 +134,9 @@ Resources:
   # ============================================================================
   # 4. API Gateway Endpoints (Dev & Prod)
   # ============================================================================
-
-  # Dev API Gateway
-  DevApiGateway:
-    Type: AWS::ApiGatewayV2::Api
-    Properties:
-      Name: hojadevida-api-dev
-      ProtocolType: HTTP
-
-  # Dev API Stage
-  DevApiStage:
-    Type: AWS::ApiGatewayV2::Stage
-    Properties:
-      ApiId: !Ref DevApiGateway
-      StageName: dev
-      AutoDeploy: true
-
-  # Prod API Gateway
-  ProdApiGateway:
-    Type: AWS::ApiGatewayV2::Api
-    Properties:
-      Name: hojadevida-api-prod
-      ProtocolType: HTTP
-
-  # Prod API Stage
-  ProdApiStage:
-    Type: AWS::ApiGatewayV2::Stage
-    Properties:
-      ApiId: !Ref ProdApiGateway
-      StageName: prod
-      AutoDeploy: true
+  # NOTE: API Gateways are now managed by AWS SAM (backend/template.yaml)
+  # SAM creates API Gateways with Lambda integrations for backend services.
+  # This allows SAM to own the complete backend stack (Lambda + API + integrations).
 
 Outputs:
   OIDCProviderArn:
@@ -210,26 +183,6 @@ Outputs:
       Name: Hojadevida-TerraformLocksProdTable
 
   # API Gateway Outputs
-  DevApiGatewayId:
-    Description: ID of the dev API Gateway
-    Value: !Ref DevApiGateway
-    Export:
-      Name: Hojadevida-DevApiGatewayId
-
-  DevApiEndpoint:
-    Description: Invoke URL of the dev API Gateway
-    Value: !Sub 'https://${DevApiGateway}.execute-api.${AWS::Region}.amazonaws.com/dev'
-    Export:
-      Name: Hojadevida-DevApiEndpoint
-
-  ProdApiGatewayId:
-    Description: ID of the prod API Gateway
-    Value: !Ref ProdApiGateway
-    Export:
-      Name: Hojadevida-ProdApiGatewayId
-
-  ProdApiEndpoint:
-    Description: Invoke URL of the prod API Gateway
-    Value: !Sub 'https://${ProdApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
-    Export:
-      Name: Hojadevida-ProdApiEndpoint
+  # NOTE: API Gateway endpoints are now provided by AWS SAM (backend/template.yaml)
+  # After SAM deployment, retrieve the API endpoint from SAM stack outputs:
+  #   aws cloudformation describe-stacks --stack-name hojadevida-backend-{env} --query 'Stacks[0].Outputs' --region us-east-1

@@ -15,116 +15,12 @@
 # ============================================================================
 # Lambda Execution Role
 # ============================================================================
-# Service role that Lambda functions assume to access AWS resources.
-# Allows interaction with DynamoDB (CVs table), S3 (storage), Bedrock (AI),
-# CloudWatch (logging), and SSM Parameter Store (configuration).
-
-resource "aws_iam_role" "lambda_execution_role" {
-  name = "${var.app_name}-lambda-execution-role-${var.environment}"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  permissions_boundary = aws_iam_policy.permission_boundary.arn
-
-  tags = {
-    Name        = "${var.app_name}-lambda-execution-role"
-    Description = "Execution role for Lambda functions"
-  }
-}
-
-# ============================================================================
-# Lambda Execution Policy
-# ============================================================================
-# Inline policy that grants Lambda functions permissions to:
-# - Read/write CV metadata in DynamoDB
-# - Store/retrieve CV documents in S3
-# - Invoke Bedrock models for CV generation
-# - Write logs to CloudWatch
-# - Retrieve configuration from SSM Parameter Store
-
-resource "aws_iam_role_policy" "lambda_execution_policy" {
-  name = "${var.app_name}-lambda-execution-policy-${var.environment}"
-  role = aws_iam_role.lambda_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ======================================================================
-      # DynamoDB Permissions
-      # ======================================================================
-      {
-        Sid    = "DynamoDBCVsTable"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:Query"
-        ]
-        Resource = aws_dynamodb_table.cvs.arn
-      },
-      # ======================================================================
-      # S3 Permissions
-      # ======================================================================
-      {
-        Sid    = "S3CVsBucket"
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
-        Resource = "${aws_s3_bucket.cvs.arn}/*"
-      },
-      # ======================================================================
-      # Bedrock Permissions
-      # ======================================================================
-      # Allow invocation of all Bedrock models for CV generation
-      {
-        Sid    = "BedrockInvokeModel"
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel"
-        ]
-        Resource = "arn:aws:bedrock:${data.aws_region.current.name}::foundation-model/*"
-      },
-      # ======================================================================
-      # CloudWatch Logs Permissions
-      # ======================================================================
-      # Allow creation and writing to CloudWatch log groups for Lambda logging
-      {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.app_name}*:*"
-      },
-      # ======================================================================
-      # SSM Parameter Store Permissions
-      # ======================================================================
-      # Allow retrieval of configuration parameters
-      {
-        Sid    = "SSMParameterStore"
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter"
-        ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.app_name}/*"
-      }
-    ]
-  })
-}
+# NOTE: Lambda execution role is managed by AWS SAM (backend/template.yaml)
+# SAM defines the role with permissions for DynamoDB, S3, Bedrock, CloudWatch, SSM.
+# This keeps backend IAM configuration tightly coupled with Lambda definitions.
+#
+# SAM-managed resource:
+# - Lambda execution role with appropriate permissions for CV generation, storage, and logging
 
 # ============================================================================
 # ECS Task Execution Role
@@ -202,14 +98,10 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid    = "S3CVsAssets"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject"
-        ]
-        Resource = "${aws_s3_bucket.cvs.arn}/*"
-      }
+      # NOTE: ECS frontend task permissions added here as needed
+      # Currently, frontend serves static content from ECS container
+      # If frontend needs to access backend resources (S3, DynamoDB), add permissions here
+      # Backend resources are managed by SAM, keep least-privilege access
     ]
   })
 }
