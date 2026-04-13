@@ -66,9 +66,17 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
+          AWS_ACCOUNT_ID: '871696174477'
+          ENV: ${{ needs.determine-env.outputs.environment }}
+        run: |
+          terraform init \
+            -backend-config="bucket=hojadevida-terraform-state-${AWS_ACCOUNT_ID}-${ENV}" \
+            -backend-config="key=hojadevida.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=hojadevida-terraform-locks-${AWS_ACCOUNT_ID}-${ENV}" \
+            -backend-config="encrypt=true"
 
       - name: Terraform Validate
         working-directory: terraform
