@@ -89,42 +89,30 @@ Resources:
   # ============================================================================
 
   HttpApi:
-     Type: AWS::Serverless::HttpApi
-     Properties:
-       Name: !Sub 'hojadevida-api-${Environment}'
-       StageName: !Ref Environment
-       CorsConfiguration:
-         AllowMethods:
-           - GET
-           - POST
-           - OPTIONS
-         AllowHeaders:
-           - Content-Type
-           - Authorization
-         AllowOrigins:
-           - '*'
-       Auth:
-         DefaultAuthorizer: CognitoAuthorizer
-         Authorizers:
-           CognitoAuthorizer:
-             IdentitySource: $request.header.Authorization
-             JwtConfiguration:
-               audience:
-                 - !Ref CognitoUserPoolClient
-               issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
-
-  # Cognito Authorizer for HTTP API (JWT-based)
-  CognitoAuthorizer:
-    Type: AWS::ApiGatewayV2::Authorizer
+    Type: AWS::Serverless::HttpApi
     Properties:
-      ApiId: !Ref HttpApi
-      AuthorizerType: JWT
-      Name: CognitoAuthorizer
-      IdentitySource: $request.header.Authorization
-      JwtConfiguration:
-        Audience:
-          - !Ref CognitoUserPoolClient
-        Issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+      Name: !Sub 'hojadevida-api-${Environment}'
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowOrigins:
+          - '*'
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            IdentitySource:
+              - $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
 
   # ============================================================================
   # DynamoDB Table
@@ -141,15 +129,12 @@ Resources:
         - AttributeName: cvId
           AttributeType: S
       KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: cvId
-          KeyType: RANGE
+         - AttributeName: userId
+           KeyType: HASH
+         - AttributeName: cvId
+           KeyType: RANGE
       StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+         StreamViewType: NEW_AND_OLD_IMAGES
 
   # ============================================================================
   # S3 Bucket for CVs
@@ -160,15 +145,12 @@ Resources:
     Properties:
       BucketName: !Sub 'hojadevida-cvs-${AWS::AccountId}-${Environment}'
       VersioningConfiguration:
-        Status: Enabled
+         Status: Enabled
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+         BlockPublicAcls: true
+         BlockPublicPolicy: true
+         IgnorePublicAcls: true
+         RestrictPublicBuckets: true
 
   # ============================================================================
   # Cognito User Pool & Client
@@ -193,15 +175,12 @@ Resources:
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
       Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireUppercase: false
-          RequireLowercase: false
-          RequireNumbers: false
-          RequireSymbols: false
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+         PasswordPolicy:
+           MinimumLength: 8
+           RequireUppercase: false
+           RequireLowercase: false
+           RequireNumbers: false
+           RequireSymbols: false
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient

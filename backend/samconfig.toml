@@ -16,7 +16,7 @@ use_container = true
 # General deployment parameters
 region = "us-east-1"
 confirm_changeset = false
-capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+capabilities = "CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND"
 no_fail_on_empty_changeset = true
 
 # Verbosity
