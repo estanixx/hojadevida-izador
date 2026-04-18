@@ -193,44 +193,14 @@ jobs:
           cat sam-outputs.json
           echo "outputs_file=sam-outputs.json" >> $GITHUB_OUTPUT
 
-      - name: Upload SAM Outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
-          path: backend/sam-outputs.json
-          retention-days: 7
-
-  # ============================================================================
-  # Update GitHub Secrets with Cognito Values
-  # ============================================================================
-  update-secrets:
-    needs:
-      - determine-env
-      - backend-deploy
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ needs.determine-env.outputs.environment }}
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download SAM Outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
-          path: sam-outputs/
-
-      - name: Extract Cognito Values and Update Secrets
+      - name: Update GitHub Secrets with Cognito Values
         env:
           ENV: ${{ needs.determine-env.outputs.environment }}
           GH_TOKEN: ${{ github.token }}
         run: |
           # Parse SAM outputs JSON
-          USER_POOL_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolId") | .OutputValue' sam-outputs/sam-outputs.json)
-          CLIENT_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolClientId") | .OutputValue' sam-outputs/sam-outputs.json)
+          USER_POOL_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolId") | .OutputValue' backend/sam-outputs.json)
+          CLIENT_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolClientId") | .OutputValue' backend/sam-outputs.json)
           
           echo "User Pool ID: $USER_POOL_ID"
           echo "Client ID: $CLIENT_ID"
@@ -245,11 +215,29 @@ jobs:
             gh secret set COGNITO_CLIENT_ID_PROD --body "$CLIENT_ID"
             echo "✅ Updated PROD environment secrets"
           fi
+
+      - name: Upload SAM Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
+          path: backend/sam-outputs.json
+          retention-days: 7
+
+      - name: Upload SAM Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
+          path: backend/sam-outputs.json
+          retention-days: 7
+
+  # ============================================================================
+  # Deploy Frontend (ECS + Docker image)
+  # ============================================================================
   frontend-deploy:
     needs:
       - determine-env
       - terraform-deploy
-      - update-secrets
+      - backend-deploy
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.determine-env.outputs.environment }}
