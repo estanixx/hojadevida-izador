@@ -196,7 +196,7 @@ jobs:
       - name: Update GitHub Secrets with Cognito Values
         env:
           ENV: ${{ needs.determine-env.outputs.environment }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           # Parse SAM outputs JSON
           USER_POOL_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolId") | .OutputValue' backend/sam-outputs.json)
