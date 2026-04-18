@@ -223,20 +223,6 @@ jobs:
             echo "✅ Updated PROD environment secrets"
           fi
 
-      - name: Upload SAM Outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
-          path: backend/sam-outputs.json
-          retention-days: 7
-
-      - name: Upload SAM Outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: sam-outputs-${{ needs.determine-env.outputs.environment }}
-          path: backend/sam-outputs.json
-          retention-days: 7
-
   # ============================================================================
   # Deploy Frontend (ECS + Docker image)
   # ============================================================================
