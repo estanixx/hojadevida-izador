@@ -198,12 +198,19 @@ jobs:
           ENV: ${{ needs.determine-env.outputs.environment }}
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Parse SAM outputs JSON
+          # Parse SAM outputs JSON (CloudFormation format)
           USER_POOL_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolId") | .OutputValue' backend/sam-outputs.json)
           CLIENT_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolClientId") | .OutputValue' backend/sam-outputs.json)
           
           echo "User Pool ID: $USER_POOL_ID"
           echo "Client ID: $CLIENT_ID"
+          
+          # Validate that we got the values
+          if [[ -z "$USER_POOL_ID" || -z "$CLIENT_ID" || "$USER_POOL_ID" == "null" || "$CLIENT_ID" == "null" ]]; then
+            echo "❌ Error: Failed to extract Cognito IDs from SAM outputs"
+            cat backend/sam-outputs.json
+            exit 1
+          fi
           
           # Update GitHub secrets based on environment
           if [[ "$ENV" == "dev" ]]; then
