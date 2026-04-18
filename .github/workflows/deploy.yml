@@ -223,6 +223,7 @@ jobs:
       - name: Extract Cognito Values and Update Secrets
         env:
           ENV: ${{ needs.determine-env.outputs.environment }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Parse SAM outputs JSON
           USER_POOL_ID=$(jq -r '.[] | select(.OutputKey=="CognitoUserPoolId") | .OutputValue' sam-outputs/sam-outputs.json)
