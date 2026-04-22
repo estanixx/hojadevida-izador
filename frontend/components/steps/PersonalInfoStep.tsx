@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 
 interface PersonalInfoStepProps {
   data: PersonalInfo;
-  onChange: (field: keyof PersonalInfo, value: string) => void;
+  onChange: (field: keyof PersonalInfo, value: string | { title: string; description: string }) => void;
   social: {
     github: string;
     linkedin: string;
@@ -86,14 +86,23 @@ export default function PersonalInfoStep({
         />
       </div>
 
-      <div className="mt-4">
-        <input
-          value={data.desiredRole}
-          onChange={(event) => onChange('desiredRole', event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Desired Role"
-          className={inputStyles}
-        />
+<div className="mt-4">
+        <div className="grid gap-4">
+          <input
+            value={data.desiredRole.title}
+            onChange={(event) => onChange('desiredRole', { ...data.desiredRole, title: event.target.value })}
+            onKeyDown={handleKeyDown}
+            placeholder="Desired Role Title (e.g., Senior Developer)"
+            className={inputStyles}
+          />
+          <textarea
+            value={data.desiredRole.description}
+            onChange={(event) => onChange('desiredRole', { ...data.desiredRole, description: event.target.value })}
+            placeholder="Describe the role you want and your key qualifications..."
+            rows={3}
+            className={`${inputStyles} resize-none`}
+          />
+        </div>
       </div>
 
       <div className="mt-6 border-t border-white/10 pt-5">

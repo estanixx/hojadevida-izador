@@ -61,16 +61,26 @@ const extractResumeJson = (bedrockResponseText) => {
 
 const buildResumePrompt = (
   cvData
-) => `Acting as a professional resume writer, transform this JSON data into a structured resume.
-Return ONLY a valid JSON object containing optimized natural language text for each section (Header, Summary, Experience, Skills, Education, Certifications, Languages, Additional) and a "pdfLayout" field with instructions for bold titles and horizontal lines.
+) => `You are an expert resume writer. Your ONLY job is to transform the provided JSON data into natural language text for each resume section.
 
-Use Harvard Resume style:
-- Header format: Name | Location | Email | Phone | LinkedIn | GitHub.
-- Section headers in uppercase bold (for example: EDUCATION, PROFESSIONAL EXPERIENCE).
-- Keep language concise, achievement-oriented, and quantified where possible.
+CRITICAL RULES:
+1. ONLY include information that is EXPLICITLY provided in the input JSON
+2. NEVER invent skills, achievements, technologies, or experiences that aren't in the input
+3. If a field is empty or "Not provided", write "Not specified" - do NOT make anything up
+4. Use the desired role description to CONTEXTUALIZE existing skills, but do NOT add new ones
+5. Keep your output factual and strictly based on the input data
 
-Input JSON:
-${JSON.stringify(cvData, null, 2)}`;
+Input JSON structure to reference:
+${JSON.stringify(cvData, null, 2)}
+
+For each section:
+- Header: Format as "Name | Location | Email | Phone | LinkedIn | GitHub" using only provided fields
+- Summary: 2-3 sentences based ONLY on the provided information
+- Experience: Transform each job entry, keeping only the achievements and metrics explicitly provided
+- Skills: List ONLY the skills explicitly provided in the skills array
+- Education, Certifications, Languages: Include only what's provided
+
+Return a valid JSON object with these exact keys: Header, Summary, Experience, Skills, Education, Certifications, Languages, Additional, and pdfLayout.`;
 
 const renderPseudoPdfContent = (name, structuredResume) => {
   const baseSections = [

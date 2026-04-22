@@ -32,7 +32,10 @@ const initialData: CVData = {
     email: '',
     phone: '',
     location: '',
-    desiredRole: '',
+    desiredRole: {
+      title: '',
+      description: '',
+    },
   },
   experiences: [createEmptyExperience()],
   skills: [],

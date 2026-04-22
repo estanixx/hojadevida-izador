@@ -1,9 +1,14 @@
+export interface DesiredRole {
+  title: string;
+  description: string;
+}
+
 export interface PersonalInfo {
   fullName: string;
   email: string;
   phone: string;
   location: string;
-  desiredRole: string;
+  desiredRole: DesiredRole;
 }
 
 export interface ExperienceItem {
