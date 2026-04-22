@@ -62,7 +62,7 @@ exports.handler = async (event) => {
     const modelText = bedrockPayload?.content?.[0]?.text || '{}';
     const structuredResume = extractResumeJson(modelText);
 
-    const pdfBytes = renderPseudoPdfContent(fullName, structuredResume);
+    const pdfBytes = renderPseudoPdfContent(fullName, structuredResume, cvData.social);
     await s3Client.send(
       new PutObjectCommand({
         Bucket: BUCKET_NAME,

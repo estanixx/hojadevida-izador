@@ -80,14 +80,20 @@ For each section:
 - Skills: List ONLY the skills explicitly provided in the skills array
 - Education, Certifications, Languages: Include only what's provided
 
-Return a valid JSON object with these exact keys: Header, Summary, Experience, Skills, Education, Certifications, Languages, Additional, and pdfLayout.`;
+Return a valid JSON object with these exact keys: Header, Summary, Experience, Skills, Education, Certifications, Languages, Additional, and pdfLayout.
 
-const renderPseudoPdfContent = (name, structuredResume) => {
+The Header should include social media links (GitHub, LinkedIn) if provided in the input JSON under the "social" field.`;
+
+const renderPseudoPdfContent = (name, structuredResume, social = {}) => {
+  const github = social?.github ? ` | GitHub: ${social.github}` : '';
+  const linkedin = social?.linkedin ? ` | LinkedIn: ${social.linkedin}` : '';
+  const socialLinks = github || linkedin ? `${github}${linkedin}` : '';
+
   const baseSections = [
     `CV: ${name}`,
     '',
     'HEADER',
-    structuredResume.Header || structuredResume.header || '',
+    (structuredResume.Header || structuredResume.header || '') + socialLinks,
     '',
     'SUMMARY',
     structuredResume.Summary || structuredResume.summary || '',
